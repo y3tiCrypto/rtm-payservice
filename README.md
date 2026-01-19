@@ -28,7 +28,7 @@ polling-based, SQLite, Bootstrap 5 widget with light/dark mode
 1. Clone the repository
 2. Install dependencies
    pip install -r requirements.txt
-3. Copy .env.example to .env and fill in your values
+3. Edit .env and fill in your values
 4. Start the server
    uvicorn app.main:app --reload
 5. Open http://localhost:8000/docs to see the interactive API documentation
