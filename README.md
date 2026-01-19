@@ -1,9 +1,9 @@
-# RaptoreumPay MVP – Accept RTM Payments (Non-Custodial)
+# RaptoreumPay 
 
 Simple SaaS-style payment processor for Raptoreum (RTM).  
 Merchants get paid directly to their own wallets – no custody, only network fees.
+polling-based, SQLite, Bootstrap 5 widget with light/dark mode
 
-Status: MVP – polling-based, SQLite, Bootstrap 5 widget with light/dark mode
 <p align="center">
   <img src="https://img.shields.io/badge/Status-MVP-orange?style=for-the-badge" alt="Status: MVP">
 </p>
