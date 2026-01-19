@@ -1,12 +1,10 @@
 # RaptoreumPay 
-
-Simple SaaS-style payment processor for Raptoreum (RTM).  
-Merchants get paid directly to their own wallets – no custody, only network fees.
-polling-based, SQLite, Bootstrap 5 widget with light/dark mode
-
 <p align="center">
   <img src="https://img.shields.io/badge/Status-MVP-orange?style=for-the-badge" alt="Status: MVP">
 </p>
+Simple SaaS-style payment processor for Raptoreum (RTM).  
+Merchants get paid directly to their own wallets – no custody, only network fees.  
+Polling-based, SQLite, Bootstrap 5 widget with light/dark mode
 
 ## Features
 - Create invoice via API (amount in RTM or fiat equivalent)
@@ -35,13 +33,14 @@ polling-based, SQLite, Bootstrap 5 widget with light/dark mode
 6. Embed the payment widget on your website (see integration docs below)
 
 ## Example raptoreum.conf (place in your node data directory)
-
+```
 server=1
 rpcuser=youruser
 rpcpassword=yourverystrongpassword123
 rpcallowip=127.0.0.1
 rpcbind=0.0.0.0
 rpcport=8766
+```
 
 ## Security Warning
 
