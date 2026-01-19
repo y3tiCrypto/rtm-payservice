@@ -1,10 +1,5 @@
-# RaptoreumPay 
-<p align="center">
-  <img src="https://img.shields.io/badge/Status-MVP-orange?style=for-the-badge" alt="Status: MVP">
-</p>
-- Simple SaaS-style payment processor for Raptoreum (RTM).  
-- Merchants get paid directly to their own wallets – no custody, only network fees.  
-- Polling-based, SQLite, Bootstrap 5 widget with light/dark mode
+# RaptoreumPay
+Simple SaaS-style payment processor for Raptoreum (RTM). Merchants get paid directly to their own wallets – no custody, only network fees.  
 
 ## Features
 - Create invoice via API (amount in RTM or fiat equivalent)
