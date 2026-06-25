@@ -54,6 +54,7 @@ When setting up MySQL for production:
 ### 4. Protecting Raptoreum Core RPC Credentials
 The payment processor relies on direct RPC calls to a running Raptoreum Core node.
 - **Isolate the RPC Port**: Never expose the Raptoreum Core RPC port (default `8766`) to the public internet. It should only listen on `127.0.0.1` or be restricted via firewall rules (`iptables` / Security Groups) to the payment processor's IP address.
+- **Isolate the ZMQ Port**: If ZeroMQ integration is enabled, ensure the ZMQ port (default `28332`) is isolated in the same manner. Restrict connection listening to localhost or the private network IP of the payment processor. Since ZeroMQ feeds do not use default authentication, exposing the port publicly poses a service spam risk.
 - **Use Strong RPC Passwords**: Core wallet nodes can authorize transactions (such as sending change or consolidating UTXOs). Use highly complex, randomly generated RPC usernames and passwords.
 
 ### 5. API Key & CORS Management

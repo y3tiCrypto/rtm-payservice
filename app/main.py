@@ -4,19 +4,22 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 import uvicorn
+import asyncio
 
 from app.database import engine, Base, get_db
 from app.config import settings
 from app.routers import payment, merchant
+from app.services import polling
 from app.services.polling import start_polling_background_task
+from app.services.zmq_listener import start_zmq_background_listener
 
-# Create all tables
-Base.metadata.create_all(bind=engine)
+# Create all tables (Managed by Alembic migrations)
+# Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="RaptoreumPay",
     description="Simple non-custodial RTM payment processor",
-    version="1.1.0"
+    version="1.2.0"
 )
 
 # Allow CORS for widget (you can restrict origins later)
@@ -73,9 +76,17 @@ def admin_backup(db: Session = Depends(get_db), _=Depends(verify_admin)):
 
 @app.on_event("startup")
 async def startup_event():
-    print("RaptoreumPay MVP starting...")
+    print("RaptoreumPay starting...")
     print(f"RPC connection: {settings.rpc_host}:{settings.rpc_port}")
-    # Start background polling task
+    
+    # 1. Capture main event loop for WebSockets
+    loop = asyncio.get_running_loop()
+    polling.main_loop = loop
+    
+    # 2. Start background ZMQ thread if enabled
+    start_zmq_background_listener(loop)
+    
+    # 3. Start background polling task (runs alongside ZMQ as backup / fallback)
     start_polling_background_task()
 
 @app.get("/")

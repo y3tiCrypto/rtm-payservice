@@ -423,17 +423,32 @@
       apiUrl,
     ) {
       const totalSeconds = 45 * 60; // 45 minutes duration standard
+      let pollInterval = null;
+      let socket = null;
 
       // Check remaining duration on init
       const initialRemaining = expires - new Date();
       if (initialRemaining <= 0) {
+        setExpiredState();
+        return;
+      }
+
+      function setExpiredState() {
         statusMessage.textContent = "Invoice expired";
         statusMessage.style.color = "var(--rtm-error)";
         statusPulse.style.background = "var(--rtm-error)";
         statusPulse.style.animation = "none";
         progressBar.style.width = "0%";
         progressBar.style.backgroundColor = "var(--rtm-error)";
-        return;
+      }
+
+      function setPaidState() {
+        statusMessage.textContent = "Payment received! Thank you.";
+        statusMessage.style.color = "var(--rtm-success)";
+        statusPulse.style.background = "var(--rtm-success)";
+        statusPulse.style.animation = "none";
+        progressBar.style.width = "100%";
+        progressBar.style.backgroundColor = "var(--rtm-success)";
       }
 
       const timerInterval = setInterval(() => {
@@ -442,13 +457,9 @@
 
         if (remaining <= 0) {
           clearInterval(timerInterval);
-          clearInterval(pollInterval);
-          statusMessage.textContent = "Invoice expired";
-          statusMessage.style.color = "var(--rtm-error)";
-          statusPulse.style.background = "var(--rtm-error)";
-          statusPulse.style.animation = "none";
-          progressBar.style.width = "0%";
-          progressBar.style.backgroundColor = "var(--rtm-error)";
+          if (pollInterval) clearInterval(pollInterval);
+          if (socket) socket.close();
+          setExpiredState();
           return;
         }
 
@@ -461,33 +472,75 @@
         statusMessage.textContent = `Awaiting payment... (${mins}:${secs.toString().padStart(2, "0")})`;
       }, 1000);
 
-      // API Poll loop for checking status changes on database
-      const pollInterval = setInterval(() => {
-        fetch(`${apiUrl}/api/payment/${data.invoice_id}/status`)
-          .then((res) => res.json())
-          .then((update) => {
+      // WebSockets Connection
+      function startWebSocket() {
+        const wsUrl =
+          apiUrl.replace(/^http/, "ws") + `/api/payment/${data.invoice_id}/ws`;
+        try {
+          socket = new WebSocket(wsUrl);
+
+          socket.onmessage = (event) => {
+            const update = JSON.parse(event.data);
             if (update.status === "paid") {
               clearInterval(timerInterval);
-              clearInterval(pollInterval);
-              statusMessage.textContent = "Payment received! Thank you.";
-              statusMessage.style.color = "var(--rtm-success)";
-              statusPulse.style.background = "var(--rtm-success)";
-              statusPulse.style.animation = "none";
-              progressBar.style.width = "100%";
-              progressBar.style.backgroundColor = "var(--rtm-success)";
+              if (pollInterval) clearInterval(pollInterval);
+              socket.close();
+              setPaidState();
             } else if (update.status === "expired") {
               clearInterval(timerInterval);
-              clearInterval(pollInterval);
-              statusMessage.textContent = "Invoice expired";
-              statusMessage.style.color = "var(--rtm-error)";
-              statusPulse.style.background = "var(--rtm-error)";
-              statusPulse.style.animation = "none";
-              progressBar.style.width = "0%";
-              progressBar.style.backgroundColor = "var(--rtm-error)";
+              if (pollInterval) clearInterval(pollInterval);
+              socket.close();
+              setExpiredState();
             }
-          })
-          .catch(() => {}); // suppress connection failures silently, try again next tick
-      }, 15000); // 15 seconds polling interval
+          };
+
+          socket.onerror = () => {
+            console.warn(
+              "RaptoreumPay: WebSocket error. Falling back to HTTP polling.",
+            );
+            startPollingFallback();
+          };
+
+          socket.onclose = (event) => {
+            // If closed abnormally, fall back to HTTP polling
+            if (event.code !== 1000 && event.code !== 1005) {
+              startPollingFallback();
+            }
+          };
+        } catch (err) {
+          console.warn(
+            "RaptoreumPay: WebSocket failed to initialize. Falling back to HTTP polling.",
+          );
+          startPollingFallback();
+        }
+      }
+
+      // REST Polling Fallback
+      function startPollingFallback() {
+        if (pollInterval) return; // avoid duplicate polling loops
+
+        pollInterval = setInterval(() => {
+          fetch(`${apiUrl}/api/payment/${data.invoice_id}/status`)
+            .then((res) => res.json())
+            .then((update) => {
+              if (update.status === "paid") {
+                clearInterval(timerInterval);
+                clearInterval(pollInterval);
+                if (socket) socket.close();
+                setPaidState();
+              } else if (update.status === "expired") {
+                clearInterval(timerInterval);
+                clearInterval(pollInterval);
+                if (socket) socket.close();
+                setExpiredState();
+              }
+            })
+            .catch(() => {});
+        }, 15000);
+      }
+
+      // Initial execution
+      startWebSocket();
     },
   };
 

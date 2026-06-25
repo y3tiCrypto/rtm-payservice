@@ -18,6 +18,11 @@ class Settings(BaseSettings):
     db_password: str = ""
     db_name: str = "raptoreumpay"
 
+    # ZeroMQ (ZMQ) Blockchain Integration
+    zmq_enabled: bool = False
+    zmq_host: str = "127.0.0.1"
+    zmq_port: int = 28332
+
     # App
     secret_key: str
     base_url: str = "http://localhost:8000"

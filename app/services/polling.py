@@ -8,10 +8,21 @@ import hmac
 import hashlib
 import json
 import time
+import asyncio
 
 from app.database import SessionLocal
 from app.models import Invoice, Merchant
 from app.rpc_client import rpc
+from app.routers.payment import manager
+
+main_loop = None
+
+def trigger_ws_broadcast(invoice_id: str, status: str):
+    if main_loop is not None:
+        asyncio.run_coroutine_threadsafe(
+            manager.broadcast_status(invoice_id, status),
+            main_loop
+        )
 
 logger = logging.getLogger(__name__)
 
@@ -48,18 +59,21 @@ def check_pending_invoices():
                     db.commit()
                     logger.info(f"Invoice {invoice.id} marked as paid ({received} RTM)")
                     send_webhook(invoice, db)
+                    trigger_ws_broadcast(invoice.id, "paid")
 
             except Exception as e:
                 logger.error(f"Polling error for invoice {invoice.id}: {e}")
 
         # Mark expired invoices
-        expired = db.query(Invoice).filter(
+        expired_records = db.query(Invoice).filter(
             Invoice.status == "pending",
             Invoice.expires_at <= datetime.utcnow()
-        ).update({"status": "expired"})
-        if expired > 0:
+        ).all()
+        for exp_inv in expired_records:
+            exp_inv.status = "expired"
             db.commit()
-            logger.info(f"Marked {expired} invoices as expired")
+            logger.info(f"Invoice {exp_inv.id} marked as expired")
+            trigger_ws_broadcast(exp_inv.id, "expired")
 
     finally:
         db.close()

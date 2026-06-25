@@ -45,7 +45,7 @@ To help you understand, deploy, and secure the system, a detailed documentation 
 ## 🚀 Quick Start
 
 ### 1. Configure the Raptoreum Daemon
-Enable RPC commands inside your `raptoreum.conf` file:
+Enable RPC commands and optionally ZeroMQ event streaming inside your `raptoreum.conf` file:
 ```ini
 server=1
 rpcuser=your_rpc_username
@@ -53,6 +53,9 @@ rpcpassword=your_secure_rpc_password_999
 rpcallowip=127.0.0.1
 rpcbind=127.0.0.1
 rpcport=8766
+
+# Enable ZeroMQ publisher for transaction hashes (Phase 3 Event Streaming)
+zmqpubhashtx=tcp://127.0.0.1:28332
 ```
 
 ### 2. Environment Configuration
@@ -60,7 +63,13 @@ Clone the repository and set up your local environment file:
 ```bash
 cp .env.example .env
 ```
-Edit `.env` to include your MySQL credentials, admin dashboard secrets, and Raptoreum RPC details.
+Edit `.env` to include your MySQL credentials, admin dashboard secrets, Raptoreum RPC details, and ZMQ configuration:
+```env
+# ZeroMQ Integration (set to True to enable instant unconfirmed payment detection)
+ZMQ_ENABLED=True
+ZMQ_HOST=127.0.0.1
+ZMQ_PORT=28332
+```
 
 ### 3. Install Dependencies
 Set up your virtual environment and install backend requirements:
@@ -75,12 +84,18 @@ Install Node formatting tools:
 npm install
 ```
 
-### 4. Format Static Assets
+### 4. Run Database Migrations
+Initialize or upgrade the MySQL database schema using Alembic:
+```bash
+alembic upgrade head
+```
+
+### 5. Format Static Assets
 ```bash
 npm run format
 ```
 
-### 5. Launch the Server
+### 6. Launch the Server
 ```bash
 uvicorn app.main:app --reload
 ```
@@ -160,7 +175,7 @@ Our development strategy outlines immediate security upgrades, administrative UI
 * **Interactive Invoice Generator**: [Completed] Built an admin-level generator interface directly inside the dashboard to manually create payment links and embed codes.
 * **Export Utilities**: [Completed] Integrated backend export streams allowing merchants to instantly download billing history in JSON and CSV formats.
 
-### ⚡ Phase 3: Scaling & Event Streaming (Q1 2027)
-* **ZeroMQ (ZMQ) Integration**: Replace background scheduling with ZMQ transaction subscriptions to receive instant blockchain payment notifications without polling.
-* **WebSockets Gateway**: Enable WebSockets to stream payment status changes to the client-side widget in real-time, reducing client request traffic.
-* **Database Migration Engine**: Integrate **Alembic** to manage automatic database schema migrations.
+### ⚡ Phase 3: Scaling & Event Streaming (Completed ✅)
+* **ZeroMQ (ZMQ) Integration**: [Completed] Constructed a ZeroMQ listener daemon thread subscribing to `hashtx` blocks to receive instant blockchain payment notifications without polling.
+* **WebSockets Gateway**: [Completed] Developed real-time WebSocket status endpoints (`/api/payment/{id}/ws`) and updated the checkout widget to use hybrid WebSocket connections with a REST poll fallback.
+* **Database Migration Engine**: [Completed] Integrated **Alembic** to manage automatic database schema migrations.

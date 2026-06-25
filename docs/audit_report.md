@@ -73,4 +73,4 @@ This report details a complete security and operational audit of RaptoreumPay. I
 | CORS Control | **Medium** | Restrict origins for administrative routes. |
 | Price Oracle | **Mitigated (PASS)** | Thread-safe pricing cache with stale fallback implemented (v1.0.0+). |
 | Key Compromise | **Mitigated (PASS)** | Merchant API Key rotation and dashboard control panel implemented (v1.1.0+). |
-| Scale limits | **Low** | If invoice volume exceeds 10,000 active concurrent invoices, migrate from polling to ZMQ. |
+| Scale limits | **Mitigated (PASS)** | ZeroMQ transaction streaming and WebSockets gateway implemented to handle large concurrency (v1.2.0+). |

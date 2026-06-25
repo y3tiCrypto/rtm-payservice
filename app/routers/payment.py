@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from datetime import datetime, timedelta
@@ -108,3 +108,48 @@ def get_invoice_status(invoice_id: str, db: Session = Depends(get_db)):
         "paid_at": invoice.paid_at.isoformat() if invoice.paid_at else None,
         "txid": invoice.txid
     }
+
+
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: dict[str, list[WebSocket]] = {}
+
+    async def connect(self, websocket: WebSocket, invoice_id: str):
+        await websocket.accept()
+        if invoice_id not in self.active_connections:
+            self.active_connections[invoice_id] = []
+        self.active_connections[invoice_id].append(websocket)
+
+    def disconnect(self, websocket: WebSocket, invoice_id: str):
+        if invoice_id in self.active_connections:
+            self.active_connections[invoice_id].remove(websocket)
+            if not self.active_connections[invoice_id]:
+                del self.active_connections[invoice_id]
+
+    async def broadcast_status(self, invoice_id: str, status: str):
+        if invoice_id in self.active_connections:
+            for connection in self.active_connections[invoice_id]:
+                try:
+                    await connection.send_json({"invoice_id": invoice_id, "status": status})
+                except Exception:
+                    pass
+
+manager = ConnectionManager()
+
+
+@router.websocket("/{invoice_id}/ws")
+async def websocket_endpoint(websocket: WebSocket, invoice_id: str, db: Session = Depends(get_db)):
+    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    if not invoice:
+        await websocket.close(code=1008)
+        return
+
+    await manager.connect(websocket, invoice_id)
+    try:
+        # Send initial status
+        await websocket.send_json({"invoice_id": invoice_id, "status": invoice.status})
+        while True:
+            # Keep socket connection open for lifecycle broadcasts
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket, invoice_id)

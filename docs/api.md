@@ -195,7 +195,42 @@ Returns the status, amounts, and blockchain details of a payment. Used by the ch
 
 ---
 
-### 8. Admin Database Backup
+### 8. Invoice Status WebSockets Gateway
+Provides a real-time event streaming interface to receive status updates for a specific invoice. Used by the checkout widget to receive instant state transitions (e.g. from pending to paid) without polling.
+
+* **URL**: `/api/payment/{invoice_id}/ws`
+* **Method**: `WEBSOCKET`
+* **Path Parameters**:
+  * `invoice_id` (Required): The unique UUID of the invoice.
+* **Events**:
+  * **On Connection**: Sends the initial state immediately:
+    ```json
+    {
+      "invoice_id": "invoice-uuid-string",
+      "status": "pending"
+    }
+    ```
+  * **On Payment Confirmed**: Emits an update:
+    ```json
+    {
+      "invoice_id": "invoice-uuid-string",
+      "status": "paid"
+    }
+    ```
+  * **On Invoice Expired**: Emits an update:
+    ```json
+    {
+      "invoice_id": "invoice-uuid-string",
+      "status": "expired"
+    }
+    ```
+* **Protocol Details**:
+  * Connect using `ws://` (or `wss://` in production).
+  * If the WebSocket connection fails or disconnects abnormally, clients should gracefully fall back to `GET /api/payment/{invoice_id}/status` REST polling.
+
+---
+
+### 9. Admin Database Backup
 Returns a list of the 100 most recent invoices across all merchants. Protected by HTTP Basic auth.
 
 * **URL**: `/admin/backup`
