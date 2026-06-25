@@ -1,69 +1,133 @@
 # RaptoreumPay
-Simple SaaS-style payment processor for Raptoreum (RTM). Merchants get paid directly to their own wallets – no custody, only network fees.  
 
-## Features
-- Create invoice via API (amount in RTM or fiat equivalent)
-- Unique receive address per invoice
-- Responsive checkout widget (simple <script> embed)
-- Light / Dark mode support in the payment widget
-- Real-time fiat conversion using CoinGecko
-- Webhook notification when payment is received
-- Basic admin backup UI (for debugging and tracking)
-- Pure polling-based payment detection (no ZMQ)
+[![Python Version](https://img.shields.io/badge/python-3.10%20%7C%203.13-blue)](https://www.python.org)
+[![Node.js Version](https://img.shields.io/badge/node-%3E%3D24.0.0-green)](https://nodejs.org)
+[![Database](https://img.shields.io/badge/database-MySQL-orange)](https://www.mysql.com)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-## Requirements
-- Python 3.10+
-- Running Raptoreum Core node with RPC enabled
-- .env file containing RPC credentials
+RaptoreumPay is a high-performance, non-custodial SaaS-style payment processor for **Raptoreum (RTM)**. By integrating directly with your private Raptoreum Core node, merchants can accept payments directly to their own wallets with zero third-party custody, zero middleman fees, and complete transaction privacy.
 
-## Quick Start
-1. Clone the repository
-2. Install dependencies
-   pip install -r requirements.txt
-3. Edit .env and fill in your values
-4. Start the server
-   uvicorn app.main:app --reload
-5. Open http://localhost:8000/docs to see the interactive API documentation
-6. Embed the payment widget on your website (see integration docs below)
+---
 
-## Example raptoreum.conf
-```raptoreum.conf
+## 📖 System Documentation
+
+To help you understand, deploy, and secure the system, a detailed documentation suite is available in the [docs/](file:///E:/RTM-Scripts/rtm-payservice/docs) folder:
+
+* **[System Architecture](file:///E:/RTM-Scripts/rtm-payservice/docs/architecture.md)**: Explore the core components, database design, and non-custodial transaction sequence.
+* **[API Reference](file:///E:/RTM-Scripts/rtm-payservice/docs/api.md)**: Specifications for invoice creation, merchant registration, webhook payloads, and admin tasks.
+* **[Deployment Guide](file:///E:/RTM-Scripts/rtm-payservice/docs/deployment.md)**: Step-by-step instructions for MySQL installation, Systemd unit files, and Nginx reverse proxy with SSL.
+* **[Security Policy](file:///E:/RTM-Scripts/rtm-payservice/SECURITY.md)**: Review our security policy, vulnerability reporting guidelines, and production hardening recommendations.
+* **[Production Audit Report](file:///E:/RTM-Scripts/rtm-payservice/docs/audit_report.md)**: Comprehensive threat assessment covering CORS, webhooks, rate limits, and risk mitigations.
+
+---
+
+## ✨ Features
+
+* **Non-Custodial Architecture**: Customers pay directly to merchant-controlled addresses. Funds never transit through a proxy wallet.
+* **Database Backend**: Powered by **MySQL** for high concurrency, pool-recycled connections, and atomic operations.
+* **Robust Address Generator**: Automatically creates and locks a unique single-use receiving address per invoice to guarantee invoice tracking.
+* **Market Exchange Integration**: Connects with CoinGecko API to convert USD billing requests into RTM values dynamically.
+* **Modern Developer Sandbox**: Interactive `/static/checkout-example.html` checkout simulator displaying developer logs and payment status tracking.
+* **Self-Contained UI Widget**: Scoped, responsive CSS-styled payment widget embedded in a single script tag—fully independent of external CSS frameworks.
+* **Webhook Notifications**: Emits immediate POST webhook alerts to merchant endpoints upon payment confirmation.
+
+---
+
+## 🛠️ Requirements
+
+* **Python**: `3.10` up to `3.13` (Precompiled binary wheels for packages require Python <= 3.13)
+* **Node.js**: Minimum `24.0.0` (For frontend asset linting, testing, and Prettier formatting)
+* **Database**: MySQL `8.0+`
+* **Daemon**: Running Raptoreum Core node (`raptoreumd`) with RPC activated.
+
+---
+
+## 🚀 Quick Start
+
+### 1. Configure the Raptoreum Daemon
+Enable RPC commands inside your `raptoreum.conf` file:
+```ini
 server=1
-rpcuser=youruser
-rpcpassword=yourverystrongpassword123
+rpcuser=your_rpc_username
+rpcpassword=your_secure_rpc_password_999
 rpcallowip=127.0.0.1
-rpcbind=0.0.0.0
+rpcbind=127.0.0.1
 rpcport=8766
 ```
 
-## Embed the Payment Widget
+### 2. Environment Configuration
+Clone the repository and set up your local environment file:
+```bash
+cp .env.example .env
+```
+Edit `.env` to include your MySQL credentials, admin dashboard secrets, and Raptoreum RPC details.
+
+### 3. Install Dependencies
+Set up your virtual environment and install backend requirements:
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows: .\venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+Install Node formatting tools:
+```bash
+npm install
+```
+
+### 4. Format Static Assets
+```bash
+npm run format
+```
+
+### 5. Launch the Server
+```bash
+uvicorn app.main:app --reload
+```
+Open [http://localhost:8000/docs](http://localhost:8000/docs) in your browser to view the interactive API swagger. Open [http://localhost:8000/static/checkout-example.html](http://localhost:8000/static/checkout-example.html) to interact with the developer sandbox dashboard.
+
+---
+
+## 🔌 Embedded Widget Integration
+
+To display the payment widget on your store site, embed the container element and configure the initialization script:
+
 ```html
-<!-- RaptoreumPay Payment Widget -->
+<!-- Payment Widget Target -->
 <div id="rtm-checkout" 
-     data-invoice-id="inv_abc123"
+     data-invoice-id="your_invoice_uuid"
      data-api-url="https://pay.yourdomain.com"
-     data-theme="dark">   <!-- or "light" -->
+     data-theme="dark"> <!-- "light", "dark", or "system" -->
 </div>
 
-<!-- Widget script -->
+<!-- QR Code and Widget Script dependencies -->
 <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 <script src="https://pay.yourdomain.com/static/widget.js"></script>
 
 <script>
   RTMWidget.init({
-    container: "rtm-checkout",
-    // optional overrides
-    theme: "dark",          // "light" or "dark" – defaults to system preference
-    pollingInterval: 30000  // ms
+    container: "rtm-checkout"
   });
 </script>
 ```
 
-## Security Warning
-This is early MVP software – use with caution:
+---
 
-- Test everything on testnet first
-- Use HTTPS in production
-- Implement rate limiting
-- Protect the admin backup interface properly
-- Never expose your RPC credentials publicly
+## 🗺️ System Roadmap
+
+Our development strategy outlines immediate security upgrades, administrative UI enhancements, and scaling optimizations:
+
+### 🚀 Phase 1: Security Hardening (Q3 2026)
+* **HMAC-SHA256 Webhook Signatures**: Introduce headers signed with a shared key to guarantee webhook authenticity and protect merchants from spoofing.
+* **Pricing Cache Layer**: Add a local caching system (5-minute time-to-live) for CoinGecko queries to prevent rate-limit failures (HTTP 503).
+* **RPC Connection Timeout Protections**: Build retry mechanisms for RPC client queries during temporary node restarts.
+
+### 📊 Phase 2: Administrative Enhancements (Q4 2026)
+* **Merchant Dashboard UI**: Develop a clean, web-based merchant dashboard to inspect payment history, verify active webhooks, and rotate API keys.
+* **Interactive Invoice Generator**: Add an admin interface to generate invoices manually for billing.
+* **Export Utilities**: Allow merchants to export payment history to CSV/JSON files.
+
+### ⚡ Phase 3: Scaling & Event Streaming (Q1 2027)
+* **ZeroMQ (ZMQ) Integration**: Replace background scheduling with ZMQ transaction subscriptions to receive instant blockchain payment notifications without polling.
+* **WebSockets Gateway**: Enable WebSockets to stream payment status changes to the client-side widget in real-time, reducing client request traffic.
+* **Database Migration Engine**: Integrate **Alembic** to manage automatic database schema migrations.

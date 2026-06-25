@@ -8,3 +8,7 @@ apscheduler==3.10.4
 qrcode==8.0
 pillow==10.4.0
 jinja2==3.1.4
+pydantic-settings==2.14.2
+python-bitcoinrpc==1.0
+pymysql==1.1.1
+cryptography==42.0.5

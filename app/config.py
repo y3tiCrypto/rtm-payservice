@@ -11,6 +11,13 @@ class Settings(BaseSettings):
     rpc_user: str
     rpc_password: str
 
+    # Database (MySQL)
+    db_host: str = "localhost"
+    db_port: int = 3306
+    db_user: str = "root"
+    db_password: str = ""
+    db_name: str = "raptoreumpay"
+
     # App
     secret_key: str
     base_url: str = "http://localhost:8000"

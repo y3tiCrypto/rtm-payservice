@@ -1,24 +1,605 @@
-<!DOCTYPE html>
-<html lang="en" data-bs-theme="dark">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RaptoreumPay Test Checkout</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body class="bg-body">
-    <div class="container py-5">
-        <h1 class="text-center mb-5">Test Payment Widget</h1>
-        
-        <!-- Replace with real values from your API -->
-        <div id="rtm-checkout"
-             data-invoice-id="paste-real-invoice-id-here"
-             data-api-url="http://localhost:8000"
-             data-theme="dark">
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RaptoreumPay Developer Sandbox & Checkout</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Plus+Jakarta+Sans:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      :root {
+        --bg-space: #0b0f19;
+        --card-glass: rgba(17, 24, 39, 0.7);
+        --border-glass: rgba(255, 255, 255, 0.08);
+        --primary: #f97316;
+        --primary-hover: #ea580c;
+        --text-main: #f8fafc;
+        --text-muted: #94a3b8;
+        --accent-green: #10b981;
+        --shadow-glow: 0 0 40px rgba(249, 115, 22, 0.15);
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: "Plus Jakarta Sans", sans-serif;
+        background-color: var(--bg-space);
+        background-image:
+          radial-gradient(
+            circle at 10% 20%,
+            rgba(249, 115, 22, 0.05) 0%,
+            transparent 40%
+          ),
+          radial-gradient(
+            circle at 90% 80%,
+            rgba(16, 185, 129, 0.03) 0%,
+            transparent 40%
+          );
+        color: var(--text-main);
+        min-height: 100vh;
+        padding: 40px 20px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .container {
+        max-width: 1200px;
+        width: 100%;
+      }
+
+      header {
+        text-align: center;
+        margin-bottom: 50px;
+      }
+
+      header h1 {
+        font-family: "Outfit", sans-serif;
+        font-size: 2.8rem;
+        font-weight: 800;
+        background: linear-gradient(
+          135deg,
+          #ffffff 40%,
+          #ffedd5 60%,
+          var(--primary) 100%
+        );
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        letter-spacing: -0.03em;
+        margin-bottom: 12px;
+      }
+
+      header p {
+        color: var(--text-muted);
+        font-size: 1.1rem;
+        font-weight: 400;
+        max-width: 600px;
+        margin: 0 auto;
+        line-height: 1.6;
+      }
+
+      .checkout-grid {
+        display: grid;
+        grid-template-columns: 1.2fr 0.8fr;
+        gap: 40px;
+        align-items: start;
+      }
+
+      @media (max-width: 992px) {
+        .checkout-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      /* Glassmorphism Panel cards */
+      .glass-card {
+        background: var(--card-glass);
+        backdrop-filter: blur(16px);
+        border: 1px solid var(--border-glass);
+        border-radius: 24px;
+        padding: 35px;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+      }
+
+      .checkout-summary h2 {
+        font-family: "Outfit", sans-serif;
+        font-size: 1.8rem;
+        font-weight: 700;
+        margin-bottom: 24px;
+        letter-spacing: -0.02em;
+        border-bottom: 1px solid var(--border-glass);
+        padding-bottom: 16px;
+      }
+
+      .order-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 20px;
+        padding-bottom: 20px;
+        border-bottom: 1px solid var(--border-glass);
+      }
+
+      .order-item-desc h4 {
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin-bottom: 6px;
+      }
+
+      .order-item-desc p {
+        font-size: 0.85rem;
+        color: var(--text-muted);
+      }
+
+      .order-price {
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: var(--primary);
+      }
+
+      /* Simulation Controls form */
+      .sim-section {
+        margin-top: 30px;
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px dashed var(--border-glass);
+        border-radius: 16px;
+        padding: 20px;
+      }
+
+      .sim-section h3 {
+        font-family: "Outfit", sans-serif;
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin-bottom: 15px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--text-main);
+      }
+
+      .form-label {
+        display: block;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        font-weight: 700;
+        color: var(--text-muted);
+        margin-bottom: 8px;
+        letter-spacing: 0.05em;
+      }
+
+      .form-control {
+        width: 100%;
+        padding: 12px 16px;
+        border-radius: 10px;
+        background: rgba(0, 0, 0, 0.2);
+        border: 1px solid var(--border-glass);
+        color: var(--text-main);
+        font-family: inherit;
+        margin-bottom: 16px;
+        outline: none;
+        transition: border-color 0.2s ease;
+      }
+
+      .form-control:focus {
+        border-color: var(--primary);
+      }
+
+      .btn-action {
+        width: 100%;
+        background: var(--primary);
+        color: #ffffff;
+        font-family: inherit;
+        font-size: 0.95rem;
+        font-weight: 700;
+        border: none;
+        padding: 14px 20px;
+        border-radius: 12px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        box-shadow: 0 4px 12px rgba(249, 115, 22, 0.2);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+      }
+
+      .btn-action:hover {
+        background: var(--primary-hover);
+        transform: translateY(-1px);
+        box-shadow: 0 6px 16px rgba(249, 115, 22, 0.3);
+      }
+
+      .btn-secondary {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid var(--border-glass);
+        color: var(--text-main);
+        box-shadow: none;
+      }
+
+      .btn-secondary:hover {
+        background: rgba(255, 255, 255, 0.1);
+        transform: none;
+        box-shadow: none;
+      }
+
+      /* Developer API status console */
+      .dev-console {
+        margin-top: 25px;
+        background: #070913;
+        border-radius: 12px;
+        font-family: "Courier New", Courier, monospace;
+        padding: 15px;
+        border: 1px solid var(--border-glass);
+        font-size: 0.8rem;
+        max-height: 200px;
+        overflow-y: auto;
+      }
+
+      .console-line {
+        margin-bottom: 8px;
+        line-height: 1.4;
+      }
+
+      .console-tag {
+        color: var(--primary);
+        font-weight: 700;
+        margin-right: 5px;
+      }
+
+      .console-success {
+        color: var(--accent-green);
+      }
+
+      /* Right column: Sticky widget display */
+      .sticky-column {
+        position: sticky;
+        top: 40px;
+      }
+
+      .badges-wrapper {
+        margin-top: 20px;
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+
+      .secure-badge {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(255, 255, 255, 0.02);
+        padding: 6px 12px;
+        border-radius: 9999px;
+        border: 1px solid var(--border-glass);
+      }
+
+      .secure-badge svg {
+        color: var(--accent-green);
+      }
+
+      footer {
+        margin-top: 80px;
+        text-align: center;
+        color: var(--text-muted);
+        font-size: 0.85rem;
+        border-top: 1px solid var(--border-glass);
+        padding-top: 30px;
+        width: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>RaptoreumPay Developer Sandbox</h1>
+        <p>
+          Experience non-custodial e-commerce checkouts. Generate mock invoices,
+          track backend logs, and inspect real-time transaction responses.
+        </p>
+      </header>
+
+      <div class="checkout-grid">
+        <!-- Left Pane: Checkout Summary & Live Simulator Form -->
+        <div class="glass-card checkout-summary">
+          <h2>Checkout Summary</h2>
+
+          <div class="order-item">
+            <div class="order-item-desc">
+              <h4>RTM Developer Pack (Digital Download)</h4>
+              <p>
+                Instant access to developer SDKs, docs, and production
+                templates.
+              </p>
+            </div>
+            <div class="order-price" id="order-price-display">$2.50 USD</div>
+          </div>
+
+          <!-- Simulation configuration panel -->
+          <div class="sim-section">
+            <h3>
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"
+                ></path>
+              </svg>
+              Invoice Simulation Controller
+            </h3>
+
+            <div
+              style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px"
+            >
+              <div>
+                <label class="form-label" for="amount-usd">Amount (USD)</label>
+                <input
+                  class="form-control"
+                  type="number"
+                  id="amount-usd"
+                  value="2.50"
+                  step="0.50"
+                  min="0.10"
+                />
+              </div>
+              <div>
+                <label class="form-label" for="merchant-email"
+                  >Merchant Email</label
+                >
+                <input
+                  class="form-control"
+                  type="email"
+                  id="merchant-email"
+                  value="developer@example.com"
+                />
+              </div>
+            </div>
+
+            <button class="btn-action" id="btn-generate">
+              Generate & Embed Live Invoice
+            </button>
+          </div>
+
+          <!-- Developer logs panel -->
+          <div style="margin-top: 20px">
+            <span class="form-label"
+              >Developer Console (Live System Calls)</span
+            >
+            <div class="dev-console" id="console-output">
+              <div class="console-line">
+                <span class="console-tag">[SYS]</span> Sandbox environment
+                loaded. Awaiting simulation trigger...
+              </div>
+            </div>
+          </div>
         </div>
+
+        <!-- Right Pane: Payment Embed Widget -->
+        <div class="sticky-column">
+          <div
+            id="rtm-checkout"
+            data-invoice-id="paste-real-invoice-id-here"
+            data-api-url=""
+            data-theme="dark"
+          ></div>
+
+          <div class="badges-wrapper">
+            <div class="secure-badge">
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+              </svg>
+              SSL/TLS Secured
+            </div>
+            <div class="secure-badge">
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+              </svg>
+              Non-Custodial Pay
+            </div>
+            <div class="secure-badge">
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+              </svg>
+              Direct Peer-to-Peer
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <footer>
+        <p>
+          &copy; 2026 RaptoreumPay. All rights reserved. For sandbox evaluation
+          only.
+        </p>
+      </footer>
     </div>
 
+    <!-- QR Code Script -->
     <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <!-- Live widget script -->
     <script src="/static/widget.js"></script>
-</body>
+
+    <script>
+      const btnGenerate = document.getElementById("btn-generate");
+      const amountUsdInput = document.getElementById("amount-usd");
+      const emailInput = document.getElementById("merchant-email");
+      const consoleOutput = document.getElementById("console-output");
+      const orderPriceDisplay = document.getElementById("order-price-display");
+      const widgetContainer = document.getElementById("rtm-checkout");
+
+      // Automatically set api base url to current window origin
+      const API_BASE = window.location.origin;
+      widgetContainer.dataset.apiUrl = API_BASE;
+
+      function logToConsole(message, type = "SYS") {
+        const line = document.createElement("div");
+        line.className = "console-line";
+
+        let tagColorClass = "";
+        if (type === "POST" || type === "GET") {
+          tagColorClass = 'style="color: #60a5fa;"';
+        } else if (type === "RES") {
+          tagColorClass = 'class="console-success"';
+        }
+
+        line.innerHTML = `<span class="console-tag" ${tagColorClass}>[${type}]</span> ${message}`;
+        consoleOutput.appendChild(line);
+        consoleOutput.scrollTop = consoleOutput.scrollHeight;
+      }
+
+      // Generate demo invoice handler
+      btnGenerate.onclick = async () => {
+        btnGenerate.disabled = true;
+        btnGenerate.textContent = "Generating...";
+
+        const amountUsd = parseFloat(amountUsdInput.value) || 2.5;
+        const email = emailInput.value || "developer@example.com";
+        orderPriceDisplay.textContent = `$${amountUsd.toFixed(2)} USD`;
+
+        try {
+          // Step 1: Ensure we have a mock API key
+          let apiKey = localStorage.getItem("rtm_mock_api_key");
+          if (!apiKey) {
+            logToConsole(
+              "No merchant profile detected. Initializing account registration...",
+              "SYS",
+            );
+            logToConsole(`POST ${API_BASE}/api/merchant/create`, "POST");
+
+            const merchRes = await fetch(`${API_BASE}/api/merchant/create`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ email: email }),
+            });
+
+            if (!merchRes.ok) {
+              const errText = await merchRes.text();
+              throw new Error(`Merchant registration failed: ${errText}`);
+            }
+
+            const merchData = await merchRes.json();
+            apiKey = merchData.api_key;
+            localStorage.setItem("rtm_mock_api_key", apiKey);
+            logToConsole(
+              `Merchant registered successfully! API Key generated: ${apiKey.substring(0, 10)}...`,
+              "RES",
+            );
+          } else {
+            logToConsole(
+              `Reusing existing mock API key from local cache: ${apiKey.substring(0, 10)}...`,
+              "SYS",
+            );
+          }
+
+          // Step 2: Create the invoice on backend
+          logToConsole(
+            `Creating invoice for $${amountUsd.toFixed(2)} USD...`,
+            "SYS",
+          );
+          logToConsole(
+            `POST ${API_BASE}/api/payment/create?api_key=${apiKey.substring(0, 5)}...`,
+            "POST",
+          );
+
+          const invRes = await fetch(
+            `${API_BASE}/api/payment/create?api_key=${apiKey}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                amount_usd: amountUsd,
+                order_id: "sandbox-order-" + Math.floor(Math.random() * 100000),
+                webhook_url: "https://webhook.site/dummy-url",
+              }),
+            },
+          );
+
+          if (!invRes.ok) {
+            const errText = await invRes.text();
+            throw new Error(`Invoice generation failed: ${errText}`);
+          }
+
+          const invData = await invRes.json();
+          logToConsole(
+            `Invoice generated successfully! ID: ${invData.invoice_id}`,
+            "RES",
+          );
+          logToConsole(
+            `Address: ${invData.address} | RTM: ${invData.amount_rtm.toFixed(4)}`,
+            "RES",
+          );
+
+          // Step 3: Embed & mount widget
+          logToConsole(
+            "Mounting RaptoreumPay interactive widget into DOM...",
+            "SYS",
+          );
+          widgetContainer.dataset.invoiceId = invData.invoice_id;
+
+          // Re-initialize the widget
+          if (window.RTMWidget) {
+            window.RTMWidget.init({ container: "rtm-checkout" });
+          }
+
+          logToConsole(
+            "Widget mounted. Awaiting blockchain payment polling...",
+            "SYS",
+          );
+        } catch (err) {
+          logToConsole(err.message, "ERR");
+          alert(err.message);
+        } finally {
+          btnGenerate.disabled = false;
+          btnGenerate.textContent = "Generate & Embed Live Invoice";
+        }
+      };
+    </script>
+  </body>
 </html>

@@ -1,0 +1,181 @@
+# API Documentation (api.md)
+
+This document provides technical documentation for the RaptoreumPay REST API. 
+
+## Base URL
+All API requests in production must be made over HTTPS.
+```
+https://pay.yourdomain.com
+```
+
+---
+
+## Authentication
+RaptoreumPay uses two types of authentication:
+
+1. **Merchant API Key**: Passed as a query parameter `api_key` for merchant and invoice creation endpoints. Example: `?api_key=your_api_key_here`.
+2. **HTTP Basic Authentication**: Used to protect admin-level paths. Uses a configured username and password.
+
+---
+
+## Endpoints
+
+### 1. Register Merchant
+Registers a new merchant email address and returns an API Key.
+
+* **URL**: `/api/merchant/create`
+* **Method**: `POST`
+* **Content-Type**: `application/json`
+* **Request Body**:
+  ```json
+  {
+    "email": "merchant@example.com"
+  }
+  ```
+* **Response (200 OK)**:
+  ```json
+  {
+    "message": "Merchant created",
+    "api_key": "your_secret_api_key_string",
+    "email": "merchant@example.com"
+  }
+  ```
+* **Errors**:
+  * `400 Bad Request`: Email already registered.
+
+---
+
+### 2. Verify Merchant Key
+Retrieves details of the authenticated merchant.
+
+* **URL**: `/api/merchant/me`
+* **Method**: `GET`
+* **Query Parameters**:
+  * `api_key` (Required): The merchant API key.
+* **Response (200 OK)**:
+  ```json
+  {
+    "id": "merchant-uuid-string",
+    "email": "merchant@example.com",
+    "active": true
+  }
+  ```
+* **Errors**:
+  * `401 Unauthorized`: Invalid API Key.
+
+---
+
+### 3. Create Invoice
+Generates a new invoice with a unique Raptoreum address. The amount can be specified in USD (which will automatically convert to RTM using CoinGecko pricing) or directly in RTM.
+
+* **URL**: `/api/payment/create`
+* **Method**: `POST`
+* **Query Parameters**:
+  * `api_key` (Required): The merchant API key.
+* **Content-Type**: `application/json`
+* **Request Body**:
+  ```json
+  {
+    "amount_rtm": 1250.50,             // Optional. Amount in RTM
+    "amount_usd": 2.50,                // Optional. Amount in USD (prefers RTM if both provided)
+    "order_id": "merchant-order-101",  // Optional. Merchant reference number
+    "webhook_url": "https://callback"  // Optional. Destination URL for webhooks
+  }
+  ```
+* **Response (200 OK)**:
+  ```json
+  {
+    "invoice_id": "invoice-uuid-string",
+    "address": "RDb9g8sW7a...",        // Unique generated RTM receiving address
+    "amount_rtm": 1250.50000000,       // Total requested RTM
+    "fiat_amount": 2.5,                // USD Value (if applicable, else null)
+    "fiat_currency": "USD",
+    "qr_url": "https://api.qrserver...", // URL to generate the transaction QR code
+    "expires_in": "45 minutes",
+    "status": "pending"
+  }
+  ```
+* **Errors**:
+  * `400 Bad Request`: Missing both `amount_rtm` and `amount_usd`.
+  * `401 Unauthorized`: Invalid API Key.
+  * `503 Service Unavailable`: Cannot fetch current RTM price from CoinGecko.
+
+---
+
+### 4. Fetch Invoice Status
+Returns the status, amounts, and blockchain details of a payment. Used by the checkout widget to monitor payments.
+
+* **URL**: `/api/payment/{invoice_id}/status`
+* **Method**: `GET`
+* **Path Parameters**:
+  * `invoice_id` (Required): The unique UUID of the invoice.
+* **Response (200 OK)**:
+  ```json
+  {
+    "invoice_id": "invoice-uuid-string",
+    "status": "pending",               // pending | paid | expired | underpaid
+    "amount_requested": 1250.50000000,
+    "amount_paid": 0.00000000,
+    "address": "RDb9g8sW7a...",
+    "created_at": "2026-06-25T11:00:00Z",
+    "expires_at": "2026-06-25T11:45:00Z",
+    "paid_at": null,
+    "txid": null
+  }
+  ```
+* **Errors**:
+  * `404 Not Found`: Invoice not found.
+
+---
+
+### 5. Admin Database Backup
+Returns a list of the 100 most recent invoices across all merchants. Protected by HTTP Basic auth.
+
+* **URL**: `/admin/backup`
+* **Method**: `GET`
+* **Headers**:
+  * `Authorization`: `Basic base64(admin:password)`
+* **Response (200 OK)**:
+  ```json
+  {
+    "status": "ok",
+    "message": "Admin backup view (MVP) - showing last 100 invoices",
+    "invoices": [
+      {
+        "id": "invoice-uuid-string",
+        "merchant_id": "merchant-uuid-string",
+        "address": "RDb9g8sW7a...",
+        "amount_requested": 1250.5,
+        "status": "paid",
+        "created_at": "2026-06-25T11:00:00"
+      }
+    ]
+  }
+  ```
+* **Errors**:
+  * `401 Unauthorized`: Incorrect admin credentials.
+
+---
+
+## Webhooks
+
+When an invoice is paid, RaptoreumPay issues an HTTP POST request to the merchant's configured `webhook_url` containing payment metadata.
+
+### Payload Format
+```json
+{
+  "event": "payment.confirmed",
+  "invoice_id": "invoice-uuid-string",
+  "amount_paid": 1250.50000000,
+  "amount_requested": 1250.50000000,
+  "address": "RDb9g8sW7a...",
+  "txid": "bfd9a8c7df0e9b8a...",
+  "paid_at": "2026-06-25T11:15:30Z",
+  "order_id": "merchant-order-101",
+  "merchant_id": "merchant-uuid-string"
+}
+```
+
+### Webhook Guidelines
+* Your system should respond with an HTTP `200 OK` or `204 No Content` within 5 seconds.
+* The webhook loop will log delivery errors but does not automatically retry failed deliveries in the current version.
