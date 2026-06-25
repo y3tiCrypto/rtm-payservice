@@ -135,7 +135,7 @@ Streams database records representing the merchant's invoice history as a CSV fi
 ---
 
 ### 6. Create Invoice
-Generates a new invoice with a unique Raptoreum address. The amount can be specified in USD (which will automatically convert to RTM using CoinGecko pricing) or directly in RTM.
+Generates a new invoice with a unique Raptoreum address. The amount can be specified directly in RTM (`amount_rtm`) or in a fiat currency (`amount_fiat` or the backward-compatible legacy parameter `amount_usd`). The currency defaults to USD if not explicitly specified.
 
 * **URL**: `/api/payment/create`
 * **Method**: `POST`
@@ -146,7 +146,9 @@ Generates a new invoice with a unique Raptoreum address. The amount can be speci
   ```json
   {
     "amount_rtm": 1250.50,             // Optional. Amount in RTM
-    "amount_usd": 2.50,                // Optional. Amount in USD (prefers RTM if both provided)
+    "amount_usd": 2.50,                // Optional. Legacy amount in USD
+    "amount_fiat": 2.50,               // Optional. Amount in target fiat currency
+    "fiat_currency": "EUR",            // Optional. Target fiat currency (defaults to USD or settings)
     "order_id": "merchant-order-101",  // Optional. Merchant reference number
     "webhook_url": "https://callback"  // Optional. Destination URL for webhooks
   }
@@ -157,8 +159,8 @@ Generates a new invoice with a unique Raptoreum address. The amount can be speci
     "invoice_id": "invoice-uuid-string",
     "address": "RDb9g8sW7a...",        // Unique generated RTM receiving address
     "amount_rtm": 1250.50000000,       // Total requested RTM
-    "fiat_amount": 2.5,                // USD Value (if applicable, else null)
-    "fiat_currency": "USD",
+    "fiat_amount": 2.5,                // Fiat value (if applicable, else null)
+    "fiat_currency": "EUR",            // Selected fiat currency
     "qr_url": "https://api.qrserver...", // URL to generate the transaction QR code
     "expires_in": "45 minutes",
     "status": "pending"

@@ -35,24 +35,25 @@ graph TD
 
 The codebase is organized into modular Python files under the `app` directory:
 
-1. **`app/main.py`**: The application entry point. It initializes FastAPI using the modern `lifespan` context manager, mounts CORS middleware dynamically loaded from configured allowed origins, registers the `slowapi` rate limiter, mounts routers, and implements the `/api/health` check system.
-2. **`app/config.py`**: Manages environment variables and configurations using `pydantic-settings`. Loads parameters for RPC connection, MySQL credentials, Redis connectivity, rate limits, confirmation block depths, sweeping thresholds, and the dynamic `cors_allow_origins` list.
+1. **`app/main.py`**: The application entry point. It initializes FastAPI using the modern `lifespan` context manager, mounts CORS middleware dynamically loaded from configured allowed origins, registers the `slowapi` rate limiter, mounts routers, implements the `/api/health` check system, and initializes structured JSON logging on startup.
+2. **`app/config.py`**: Manages environment variables and configurations using `pydantic-settings`. Loads parameters for RPC connection, MySQL credentials, Redis connectivity, rate limits, confirmation block depths, sweeping thresholds, the dynamic `cors_allow_origins` list, default fiat billing currency, and structured logging mode.
 3. **`app/database.py`**: Creates the SQLAlchemy database engine connecting to MySQL via PyMySQL with connection pool recycling.
-4. **`app/models.py`**: Defines the database schema:
+4. **`app/logging_config.py`**: Configures a lightweight, zero-dependency structured `JSONFormatter` subclassing `logging.Formatter` to stream console logs as single-line JSON strings suitable for production log aggregators.
+5. **`app/models.py`**: Defines the database schema:
    - **`Merchant`**: Tracks emails, API keys, `xpub` (Master Public Key), `next_address_index`, `sweep_address`, and `sweep_threshold`.
-   - **`Invoice`**: Tracks address, RTM amount, USD value, status (`pending`, `detected`, `paid`, `expired`, `underpaid`), `is_swept` sweeping status, and payment txid.
+   - **`Invoice`**: Tracks address, RTM amount, fiat value, status (`pending`, `detected`, `paid`, `expired`, `underpaid`), `is_swept` sweeping status, and payment txid.
    - **`WebhookDelivery`**: Manages the persistent queue. Stores url, payload, status (`pending`, `sent`, `failed`, `dlq`), retry attempts, next attempt schedule, and last errors.
-5. **`app/rpc_client.py`**: Integrates with the core daemon via JSON-RPC. Handles address validation (`validateaddress`), balance checking (`getbalance`), address querying (`getreceivedbyaddress`), and UTXO sweeps (`sendtoaddress` with subtract-fees flag).
-6. **`app/redis_client.py`**: Configures Redis client instances for caching and pub/sub socket broadcasts (falls back to memory if Redis is disabled).
-7. **`app/limiter.py`**: Configures API rate limit limits based on slowapi.
-8. **`app/services/hd_wallet.py`**: Offline HD wallet address generator. Derives mainnet legacy P2PKH addresses from `xpub` structures using the `bip-utils` library.
-9. **`app/services/polling.py`**: Main scheduler orchestrating:
+6. **`app/rpc_client.py`**: Integrates with the core daemon via JSON-RPC. Handles address validation (`validateaddress`), balance checking (`getbalance`), address querying (`getreceivedbyaddress`), and UTXO sweeps (`sendtoaddress` with subtract-fees and smart fee parameters).
+7. **`app/redis_client.py`**: Configures Redis client instances for caching and pub/sub socket broadcasts (falls back to memory if Redis is disabled).
+8. **`app/limiter.py`**: Configures API rate limit limits based on slowapi.
+9. **`app/services/hd_wallet.py`**: Offline HD wallet address generator. Derives mainnet legacy P2PKH addresses from `xpub` structures using the `bip-utils` library.
+10. **`app/services/polling.py`**: Main scheduler orchestrating:
    - **Invoice Confirmation Polling**: Confirms payments when they meet confirmation depth.
    - **Webhook Deliveries Queue**: Dispatches POSTs with exponential backoff and routes failures to a Dead Letter Queue (DLQ).
    - **Wallet Sweeping**: Sweeps paid funds to the merchant sweep address once threshold criteria are met.
    - **Database Pruning**: Deletes expired invoices (>30 days) and sent webhooks (>7 days).
-10. **`app/services/price.py`**: Price oracle aggregator. Fetches from CoinGecko, falling back to CoinEx ticker if CoinGecko is offline, and caching results in Redis. Implements a resilient memory cache fallback if Redis is enabled but goes offline.
-11. **`app/services/zmq_listener.py`**: Subscribes to the node's `hashtx` ZeroMQ socket to capture mempool broadcasts instantly. Distributes incoming transaction check tasks to a bounded `ThreadPoolExecutor` to prevent thread and process exhaustion under high mempool loads.
+11. **`app/services/price.py`**: Price oracle aggregator. Fetches rates dynamically for generic fiat currencies (USD, EUR, GBP) from CoinGecko, falling back to CoinEx ticker if CoinGecko is offline, and caching results in Redis. Implements a resilient memory cache fallback if Redis is enabled but goes offline.
+12. **`app/services/zmq_listener.py`**: Subscribes to the node's `hashtx` ZeroMQ socket to capture mempool broadcasts instantly. Distributes incoming transaction check tasks to a bounded `ThreadPoolExecutor` to prevent thread and process exhaustion under high mempool loads.
 12. **`static/widget.js`**: Scoped checkout UI. Attempts a WebSocket connection for real-time transitions (0-conf detected / paid), automatically falling back to HTTP REST polling if the socket drops.
 
 ---

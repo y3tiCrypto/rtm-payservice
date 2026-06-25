@@ -37,6 +37,8 @@ class Settings(BaseSettings):
     secret_key: str
     base_url: str = "http://localhost:8000"
     cors_allow_origins: str = "*"
+    default_fiat_currency: str = "USD"
+    structured_logging: bool = False
 
     # Admin (very basic for MVP)
     admin_username: str = "admin"

@@ -14,6 +14,12 @@ from app.routers import payment, merchant
 from app.services import polling
 from app.services.polling import start_polling_background_task
 from app.services.zmq_listener import start_zmq_background_listener
+from app.logging_config import setup_logging
+
+setup_logging()
+
+import logging
+logger = logging.getLogger("app.main")
 
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
@@ -21,8 +27,8 @@ from app.limiter import limiter
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("RaptoreumPay starting...")
-    print(f"RPC connection: {settings.rpc_host}:{settings.rpc_port}")
+    logger.info("RaptoreumPay starting...")
+    logger.info(f"RPC connection: {settings.rpc_host}:{settings.rpc_port}")
     
     # 1. Capture main event loop for WebSockets
     loop = asyncio.get_running_loop()
@@ -46,7 +52,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="RaptoreumPay",
     description="Simple non-custodial RTM payment processor",
-    version="1.5.0",
+    version="1.6.0",
     lifespan=lifespan
 )
 

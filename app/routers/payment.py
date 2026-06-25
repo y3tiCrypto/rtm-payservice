@@ -7,7 +7,7 @@ import uuid
 from app.database import get_db
 from app.models import Invoice, Merchant
 from app.rpc_client import rpc
-from app.services.price import get_rtm_price_usd
+from app.services.price import get_rtm_price
 from app.config import settings
 from app.limiter import limiter
 
@@ -16,7 +16,9 @@ router = APIRouter()
 
 class InvoiceCreate(BaseModel):
     amount_rtm: float | None = None
-    amount_usd: float | None = None
+    amount_usd: float | None = None  # Legacy/backward compatible parameter
+    amount_fiat: float | None = None # Generic fiat amount
+    fiat_currency: str | None = None
     order_id: str | None = None
     webhook_url: str | None = None
 
@@ -26,7 +28,7 @@ class InvoiceResponse(BaseModel):
     address: str
     amount_rtm: float
     fiat_amount: float | None
-    fiat_currency: str = "USD"
+    fiat_currency: str
     qr_url: str
     expires_in: str
     status: str = "pending"
@@ -45,18 +47,22 @@ def create_invoice(
     if not merchant:
         raise HTTPException(status_code=401, detail="Invalid API key")
 
-    # Amount logic: prefer RTM if provided, otherwise convert from USD
+    fiat_currency = (invoice_data.fiat_currency or settings.default_fiat_currency).upper()
+
+    # Amount logic: prefer RTM if provided, otherwise convert from fiat
     if invoice_data.amount_rtm is not None:
         amount_rtm = invoice_data.amount_rtm
         fiat_amount = None
-    elif invoice_data.amount_usd is not None:
-        rtm_price = get_rtm_price_usd()
-        if rtm_price <= 0:
-            raise HTTPException(status_code=503, detail="Cannot fetch current RTM price")
-        amount_rtm = invoice_data.amount_usd / rtm_price
-        fiat_amount = invoice_data.amount_usd
     else:
-        raise HTTPException(status_code=400, detail="Provide either amount_rtm or amount_usd")
+        target_fiat = invoice_data.amount_fiat if invoice_data.amount_fiat is not None else invoice_data.amount_usd
+        if target_fiat is not None:
+            rtm_price = get_rtm_price(fiat_currency)
+            if rtm_price <= 0:
+                raise HTTPException(status_code=503, detail=f"Cannot fetch current RTM price for {fiat_currency}")
+            amount_rtm = target_fiat / rtm_price
+            fiat_amount = target_fiat
+        else:
+            raise HTTPException(status_code=400, detail="Provide either amount_rtm, amount_fiat, or amount_usd")
 
     # Generate unique address
     try:
@@ -77,6 +83,7 @@ def create_invoice(
         address=address,
         amount_requested=amount_rtm,
         fiat_amount=fiat_amount,
+        fiat_currency=fiat_currency,
         order_id=invoice_data.order_id,
         webhook_url=invoice_data.webhook_url,
         expires_at=expires_at,
@@ -94,6 +101,7 @@ def create_invoice(
         address=address,
         amount_rtm=amount_rtm,
         fiat_amount=fiat_amount,
+        fiat_currency=fiat_currency,
         qr_url=qr_url,
         expires_in="45 minutes"
     )

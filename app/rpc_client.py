@@ -63,14 +63,26 @@ class RaptoreumRPC:
         except Exception as e:
             raise Exception(f"RPC error getting wallet balance: {e}")
 
-    def sweep_wallet(self, sweep_address: str, amount: float) -> str:
+    def sweep_wallet(self, sweep_address: str, amount: float, conf_target: int = 6, estimate_mode: str = "CONSERVATIVE") -> str:
         """
         Sweep a specific amount from the node's wallet to a destination sweep address.
         Deducts transaction fees from the sweep amount automatically.
+        Utilizes conf_target and estimate_mode to enable dynamic smart fee calculations.
         """
         try:
-            # sendtoaddress args: address, amount, comment, comment_to, subtractfeefromamount
-            return self._call_with_retry("sendtoaddress", sweep_address, amount, "", "", True)
+            # sendtoaddress args: address, amount, comment, comment_to, subtractfeefromamount, use_is, use_ps, conf_target, estimate_mode
+            return self._call_with_retry(
+                "sendtoaddress",
+                sweep_address,
+                amount,
+                "",  # comment
+                "",  # comment_to
+                True,  # subtractfeefromamount
+                False,  # use_is (InstantSend)
+                False,  # use_ps (PrivateSend)
+                conf_target,
+                estimate_mode
+            )
         except Exception as e:
             raise Exception(f"RPC sweeping error: {e}")
 

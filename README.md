@@ -72,6 +72,12 @@ ZMQ_PORT=28332
 
 # CORS Configuration (comma-separated list of allowed origins, or * for all)
 CORS_ALLOW_ORIGINS=*
+
+# Default Fiat Currency (default USD)
+DEFAULT_FIAT_CURRENCY=USD
+
+# Structured JSON Logging for production APM (True/False)
+STRUCTURED_LOGGING=False
 ```
 
 ### 3. Install Dependencies
@@ -103,6 +109,12 @@ npm run format
 uvicorn app.main:app --reload
 ```
 Open [http://localhost:8000/docs](http://localhost:8000/docs) in your browser to view the interactive API swagger. Open [http://localhost:8000/static/checkout-example.html](http://localhost:8000/static/checkout-example.html) to interact with the developer sandbox dashboard, or open [http://localhost:8000/static/dashboard.html](http://localhost:8000/static/dashboard.html) to manage your merchant account metrics and key settings.
+
+### 7. Run the Automated Test Suite
+Execute unit and integration tests using pytest:
+```bash
+py -3.13 -m pytest
+```
 
 ---
 
@@ -203,3 +215,9 @@ Our development strategy outlines immediate security upgrades, administrative UI
 * **Resilient Local Price Cache Fallback**: [Completed] Upgraded the pricing oracle client to fallback gracefully to the local thread-safe in-memory cache if Redis is enabled but goes offline.
 * **Timezone-Aware Standardizations**: [Completed] Replaced naive `datetime.utcnow()` with timezone-aware `datetime.now(timezone.utc)` to comply with Python 3.12+ datetime deprecation guidelines.
 * **Configurable CORS Origins**: [Completed] Replaced the hardcoded CORS wildcard with a configurable environment setting (`CORS_ALLOW_ORIGINS`).
+
+### 💎 Phase 7: Infrastructure, Testing, and Multi-Fiat Support (Completed ✅)
+* **Dynamic Sweep Fee Estimations**: [Completed] Extended RPC sweeps to supply confirmation target parameters allowing Core-based smart fee sweep calculations.
+* **Structured JSON Logging Formatter**: [Completed] Implemented a zero-dependency JSON logger formatter to output structured logs for log aggregators (ELK, Loki, Datadog).
+* **Automated Unit & Integration Test Suite**: [Completed] Constructed a mocked test suite using `pytest` and `pytest-mock` verifying HD wallet derivation, pricing client caching, and health status APIs.
+* **International Multi-Fiat Conversions**: [Completed] Refactored price service and payment schemas to accept generic fiat currencies (EUR, GBP, etc.) and convert rates dynamically.

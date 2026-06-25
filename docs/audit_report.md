@@ -84,3 +84,7 @@ This report details a complete security and operational audit of RaptoreumPay. I
 | Database Bloat | **Mitigated (PASS)** | Automatic database record pruning and retention scheduler (v1.4.0+). |
 | Thread Exhaustion | **Mitigated (PASS)** | ZMQ listener utilizing bounded ThreadPoolExecutor worker pools to process events (v1.5.0+). |
 | Timezone naive offset | **Mitigated (PASS)** | Standardized datetime usages to timezone-aware datetime.now(timezone.utc) (v1.5.0+). |
+| Log Auditing / APM | **Mitigated (PASS)** | Zero-dependency structured JSON Logging formatter (v1.6.0+). |
+| Stability / Regression | **Mitigated (PASS)** | Mock-based automated pytest suite verifying health, price cache, and HD key components (v1.6.0+). |
+| Excessive Sweep Fees | **Mitigated (PASS)** | Extended RPC sweep method to accept confirmation target and smart fee estimation parameters (v1.6.0+). |
+| Currency Volatility | **Mitigated (PASS)** | Support for dynamic fiat conversion currencies and currency-specific pricing caches (v1.6.0+). |
