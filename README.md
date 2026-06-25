@@ -84,7 +84,7 @@ npm run format
 ```bash
 uvicorn app.main:app --reload
 ```
-Open [http://localhost:8000/docs](http://localhost:8000/docs) in your browser to view the interactive API swagger. Open [http://localhost:8000/static/checkout-example.html](http://localhost:8000/static/checkout-example.html) to interact with the developer sandbox dashboard.
+Open [http://localhost:8000/docs](http://localhost:8000/docs) in your browser to view the interactive API swagger. Open [http://localhost:8000/static/checkout-example.html](http://localhost:8000/static/checkout-example.html) to interact with the developer sandbox dashboard, or open [http://localhost:8000/static/dashboard.html](http://localhost:8000/static/dashboard.html) to manage your merchant account metrics and key settings.
 
 ---
 
@@ -155,10 +155,10 @@ Our development strategy outlines immediate security upgrades, administrative UI
 * **Pricing Cache Layer**: [Completed] Implemented a thread-safe local cache (5-minute TTL) with an expired cache fallback system to ensure uninterrupted service if CoinGecko goes offline.
 * **RPC Connection Timeout Protections**: [Completed] Constructed an RPC retry method with incremental backoff (3 attempts) to improve resilience against transient network anomalies and daemon restarts.
 
-### 📊 Phase 2: Administrative Enhancements (Q4 2026)
-* **Merchant Dashboard UI**: Develop a clean, web-based merchant dashboard to inspect payment history, verify active webhooks, and rotate API keys.
-* **Interactive Invoice Generator**: Add an admin interface to generate invoices manually for billing.
-* **Export Utilities**: Allow merchants to export payment history to CSV/JSON files.
+### 📊 Phase 2: Administrative Enhancements (Completed ✅)
+* **Merchant Dashboard UI**: [Completed] Developed a premium, responsive merchant dashboard (`static/dashboard.html`) to monitor transaction metrics, active invoices, and configuration details.
+* **Interactive Invoice Generator**: [Completed] Built an admin-level generator interface directly inside the dashboard to manually create payment links and embed codes.
+* **Export Utilities**: [Completed] Integrated backend export streams allowing merchants to instantly download billing history in JSON and CSV formats.
 
 ### ⚡ Phase 3: Scaling & Event Streaming (Q1 2027)
 * **ZeroMQ (ZMQ) Integration**: Replace background scheduling with ZMQ transaction subscriptions to receive instant blockchain payment notifications without polling.

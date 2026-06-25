@@ -60,6 +60,7 @@ The payment processor relies on direct RPC calls to a running Raptoreum Core nod
 - By default, the FastAPI application uses a CORS wildcard (`allow_origins=["*"]`) to allow the client-side checkout widget to communicate with the payment server from any domain.
 - While required for flexible widget embeds, restrict `/api/merchant/*` routes or implement origin checks to prevent unauthorized registrations if public registration is not desired.
 - Keep merchant API keys confidential. Store them server-side; they should never be exposed in client-side script code.
+- **API Key Rotation**: If a merchant suspects that their API Key has been compromised, they should immediately perform a key rotation via the settings panel in the Merchant Dashboard (`/static/dashboard.html`). This immediately deactivates the old key in the database and generates a secure new replacement, stopping any unauthorized invoice creation.
 
 ### 6. Webhook Authenticity & Webhook Signatures
 Webhooks notify merchant systems when a payment is received. If a malicious third party sends spoofed webhook payloads to the merchant, they could trick the merchant into shipping goods without paying.

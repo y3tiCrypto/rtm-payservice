@@ -16,7 +16,7 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title="RaptoreumPay",
     description="Simple non-custodial RTM payment processor",
-    version="1.0.0"
+    version="1.1.0"
 )
 
 # Allow CORS for widget (you can restrict origins later)
