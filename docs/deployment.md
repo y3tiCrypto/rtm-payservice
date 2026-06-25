@@ -184,3 +184,44 @@ alembic upgrade head
 ```
 
 Do not modify the database tables or models manually in production without executing formal schema migration files.
+
+---
+
+## 7. Containerization & Orchestration (Docker & Kubernetes)
+
+For modern cloud deployments, RaptoreumPay is packaged as a standard container with orchestration manifests provided.
+
+### Docker Deployment
+
+A production-grade, multi-stage `Dockerfile` is provided in the project root along with a `docker-compose.prod.yml` template for quick service composition.
+
+1. **Build and Run via Docker Compose**:
+   ```bash
+   docker-compose -f docker-compose.prod.yml up --build -d
+   ```
+   This composition starts:
+   - The FastAPI backend application.
+   - A MySQL database container.
+   - A Redis cache container.
+
+2. **Run Alembic Migrations inside the Container**:
+   ```bash
+   docker-compose -f docker-compose.prod.yml exec web alembic upgrade head
+   ```
+
+### Kubernetes Orchestration
+
+Deployment manifests are located under the `k8s/` folder:
+- `k8s/configmap.yml`: Application environment configurations.
+- `k8s/deployment.yml`: The main application deployment container replica specification.
+- `k8s/service.yml`: Headless internal service routing.
+
+1. **Apply the manifests**:
+   ```bash
+   kubectl apply -f k8s/configmap.yml
+   kubectl apply -f k8s/deployment.yml
+   kubectl apply -f k8s/service.yml
+   ```
+
+2. **Environment Variable Configuration**:
+   Update `k8s/configmap.yml` with your production database endpoints, Redis addresses, and Raptoreum RPC node details before applying.

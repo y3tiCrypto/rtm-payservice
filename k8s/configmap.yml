@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rtm-pay-config
+data:
+  DB_HOST: "rtm-pay-db"
+  DB_PORT: "3306"
+  DB_USER: "rtm_pay_user"
+  DB_NAME: "raptoreumpay"
+  RPC_HOST: "127.0.0.1"
+  RPC_PORT: "8766"
+  ZMQ_ENABLED: "True"
+  ZMQ_HOST: "127.0.0.1"
+  ZMQ_PORT: "28332"
+  REDIS_ENABLED: "True"
+  REDIS_HOST: "rtm-pay-redis"
+  REDIS_PORT: "6379"

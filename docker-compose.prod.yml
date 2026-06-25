@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rtm_pay_app
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - redis
+    restart: always
+
+  db:
+    image: mysql:8.0
+    container_name: rtm_pay_db
+    environment:
+      MYSQL_ROOT_PASSWORD: root_super_password
+      MYSQL_DATABASE: raptoreumpay
+      MYSQL_USER: rtm_pay_user
+      MYSQL_PASSWORD: your_super_secure_db_password_here
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    restart: always
+
+  redis:
+    image: redis:7.0-alpine
+    container_name: rtm_pay_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: always
+
+volumes:
+  mysql_data:
+  redis_data:

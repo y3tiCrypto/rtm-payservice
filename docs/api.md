@@ -134,7 +134,29 @@ Streams database records representing the merchant's invoice history as a CSV fi
 
 ---
 
-### 6. Create Invoice
+### 6. Fetch Merchant Visual Analytics
+Retrieves aggregated daily transaction volume and transaction count statistics over the past 30 days for visual chart rendering.
+
+* **URL**: `/api/merchant/analytics`
+* **Method**: `GET`
+* **Query Parameters**:
+  * `api_key` (Required): The merchant API key.
+* **Response (200 OK)**:
+  ```json
+  {
+    "labels": ["2026-05-26", "2026-05-27", "2026-05-28"],
+    "volume_rtm": [1500.0, 0.0, 3200.5],
+    "volume_fiat": [3.75, 0.0, 8.01],
+    "paid_count": [2, 0, 3],
+    "expired_count": [1, 0, 2]
+  }
+  ```
+* **Errors**:
+  * `401 Unauthorized`: Invalid API Key.
+
+---
+
+### 7. Create Invoice
 Generates a new invoice with a unique Raptoreum address. The amount can be specified directly in RTM (`amount_rtm`) or in a fiat currency (`amount_fiat` or the backward-compatible legacy parameter `amount_usd`). The currency defaults to USD if not explicitly specified.
 
 * **URL**: `/api/payment/create`
@@ -173,7 +195,7 @@ Generates a new invoice with a unique Raptoreum address. The amount can be speci
 
 ---
 
-### 7. Fetch Invoice Status
+### 8. Fetch Invoice Status
 Returns the status, amounts, and blockchain details of a payment. Used by the checkout widget to monitor payments.
 
 * **URL**: `/api/payment/{invoice_id}/status`
@@ -199,7 +221,7 @@ Returns the status, amounts, and blockchain details of a payment. Used by the ch
 
 ---
 
-### 8. Invoice Status WebSockets Gateway
+### 9. Invoice Status WebSockets Gateway
 Provides a real-time event streaming interface to receive status updates for a specific invoice. Used by the checkout widget to receive instant state transitions (e.g. from pending to paid) without polling.
 
 * **URL**: `/api/payment/{invoice_id}/ws`
@@ -241,7 +263,7 @@ Provides a real-time event streaming interface to receive status updates for a s
 
 ---
 
-### 9. Admin Database Backup
+### 10. Admin Database Backup
 Returns a list of the 100 most recent invoices across all merchants. Protected by HTTP Basic auth.
 
 * **URL**: `/admin/backup`
@@ -354,3 +376,54 @@ Retrieves the real-time operational status of database connectivity, Redis serve
     }
   }
   ```
+
+---
+
+## Python Client SDK
+
+A native, zero-dependency Python Client SDK is available in [sdk/raptoreumpay.py](file:///E:/RTM-Scripts/rtm-payservice/sdk/raptoreumpay.py) to simplify API integration in external Python projects.
+
+### Initialization
+
+```python
+from sdk.raptoreumpay import RaptoreumPayClient
+
+client = RaptoreumPayClient(
+    api_key="your_secret_api_key_here",
+    base_url="https://pay.yourdomain.com"
+)
+```
+
+### Methods
+
+#### 1. Create Invoice
+Generates a new payment invoice request.
+
+```python
+invoice = client.create_invoice(
+    amount_rtm=100.0,  # or amount_fiat=2.50, fiat_currency="USD"
+    order_id="order_12345",
+    webhook_url="https://yourstore.com/webhooks/rtm"
+)
+print(invoice["invoice_id"], invoice["address"])
+```
+
+#### 2. Get Invoice Status
+Fetches the current status and payment metrics of an invoice.
+
+```python
+status = client.get_invoice_status(invoice_id="your-invoice-uuid")
+print(status["status"])  # 'pending', 'paid', or 'expired'
+```
+
+#### 3. Verify Webhook Signature
+A static utility method to verify incoming HMAC signatures on webhooks.
+
+```python
+is_valid = RaptoreumPayClient.verify_webhook_signature(
+    payload_bytes=request.body(),
+    signature=request.headers.get("X-RTM-Signature"),
+    timestamp=request.headers.get("X-RTM-Timestamp"),
+    api_key="your_secret_api_key_here"
+)
+```

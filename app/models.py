@@ -16,6 +16,8 @@ class Merchant(Base):
     next_address_index = Column(Integer, default=0, nullable=False)
     sweep_address = Column(String(255), nullable=True)
     sweep_threshold = Column(Float, default=1000.0, nullable=False)
+    sweep_cold_address = Column(String(255), nullable=True)
+    sweep_split_ratio = Column(Float, default=1.0, nullable=False)
 
 
 class Invoice(Base):

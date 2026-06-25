@@ -52,7 +52,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="RaptoreumPay",
     description="Simple non-custodial RTM payment processor",
-    version="1.6.0",
+    version="1.7.0",
     lifespan=lifespan
 )
 

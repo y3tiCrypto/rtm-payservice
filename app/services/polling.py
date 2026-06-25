@@ -257,10 +257,34 @@ def run_wallet_sweeping():
                         )
                         continue
 
-                    # Execute sweep
-                    logger.info(f"Sweeping: Consolidating {total_to_sweep} RTM to {merchant.sweep_address} for merchant {merchant.id}")
-                    txid = rpc.sweep_wallet(merchant.sweep_address, total_to_sweep)
-                    logger.info(f"Sweeping: Transaction complete. TXID: {txid}")
+                    # Execute sweep (support cold storage split sweeps)
+                    if merchant.sweep_cold_address and merchant.sweep_split_ratio < 1.0:
+                        split_ratio = max(min(merchant.sweep_split_ratio, 1.0), 0.0)
+                        amount_main = total_to_sweep * split_ratio
+                        amount_cold = total_to_sweep - amount_main
+                        
+                        txids = []
+                        if amount_main > 0:
+                            if not rpc.validate_address(merchant.sweep_address):
+                                logger.error(f"Sweeping: Merchant {merchant.id} has an invalid main sweep address: {merchant.sweep_address}")
+                                continue
+                            logger.info(f"Sweeping: Consolidating {amount_main:.8f} RTM to main address {merchant.sweep_address} for merchant {merchant.id}")
+                            txid_main = rpc.sweep_wallet(merchant.sweep_address, amount_main)
+                            txids.append(txid_main)
+                            
+                        if amount_cold > 0:
+                            if not rpc.validate_address(merchant.sweep_cold_address):
+                                logger.error(f"Sweeping: Merchant {merchant.id} has an invalid cold sweep address: {merchant.sweep_cold_address}")
+                                continue
+                            logger.info(f"Sweeping: Consolidating {amount_cold:.8f} RTM to cold address {merchant.sweep_cold_address} for merchant {merchant.id}")
+                            txid_cold = rpc.sweep_wallet(merchant.sweep_cold_address, amount_cold)
+                            txids.append(txid_cold)
+                            
+                        logger.info(f"Sweeping: Split transaction complete. TXIDs: {', '.join(txids)}")
+                    else:
+                        logger.info(f"Sweeping: Consolidating {total_to_sweep:.8f} RTM to {merchant.sweep_address} for merchant {merchant.id}")
+                        txid = rpc.sweep_wallet(merchant.sweep_address, total_to_sweep)
+                        logger.info(f"Sweeping: Transaction complete. TXID: {txid}")
 
                     # Mark invoices as swept
                     for inv in invoices:

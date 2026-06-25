@@ -6,7 +6,7 @@ import uuid
 import secrets
 import io
 import csv
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from app.database import get_db
 from app.models import Merchant, Invoice
@@ -162,3 +162,69 @@ def export_merchant_data(api_key: str, format: str = "json", db: Session = Depen
                 } for inv in invoices
             ]
         }
+
+
+@router.get("/analytics")
+def get_merchant_analytics(api_key: str, db: Session = Depends(get_db)):
+    merchant = db.query(Merchant).filter(Merchant.api_key == api_key).first()
+    if not merchant:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+    # Fetch last 30 days invoices
+    cutoff_date = datetime.now(timezone.utc) - timedelta(days=30)
+    invoices = db.query(Invoice).filter(
+        Invoice.merchant_id == merchant.id,
+        Invoice.created_at >= cutoff_date
+    ).all()
+
+    # Group daily stats locally to prevent dialect-specific SQL datetime function errors
+    daily_stats = {}
+    
+    for i in range(30, -1, -1):
+        day_str = (datetime.now(timezone.utc) - timedelta(days=i)).strftime("%Y-%m-%d")
+        daily_stats[day_str] = {
+            "volume_rtm": 0.0,
+            "volume_fiat": 0.0,
+            "paid_count": 0,
+            "expired_count": 0
+        }
+
+    for inv in invoices:
+        day_str = inv.created_at.strftime("%Y-%m-%d")
+        if day_str not in daily_stats:
+            daily_stats[day_str] = {
+                "volume_rtm": 0.0,
+                "volume_fiat": 0.0,
+                "paid_count": 0,
+                "expired_count": 0
+            }
+            
+        if inv.status == "paid":
+            daily_stats[day_str]["volume_rtm"] += inv.amount_paid
+            daily_stats[day_str]["volume_fiat"] += (inv.fiat_amount or 0.0)
+            daily_stats[day_str]["paid_count"] += 1
+        elif inv.status == "expired":
+            daily_stats[day_str]["expired_count"] += 1
+
+    sorted_days = sorted(daily_stats.keys())
+    
+    labels = []
+    volume_rtm = []
+    volume_fiat = []
+    paid_count = []
+    expired_count = []
+
+    for day in sorted_days:
+        labels.append(day)
+        volume_rtm.append(round(daily_stats[day]["volume_rtm"], 4))
+        volume_fiat.append(round(daily_stats[day]["volume_fiat"], 2))
+        paid_count.append(daily_stats[day]["paid_count"])
+        expired_count.append(daily_stats[day]["expired_count"])
+
+    return {
+        "labels": labels,
+        "volume_rtm": volume_rtm,
+        "volume_fiat": volume_fiat,
+        "paid_count": paid_count,
+        "expired_count": expired_count
+    }

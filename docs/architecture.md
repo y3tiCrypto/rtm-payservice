@@ -40,7 +40,7 @@ The codebase is organized into modular Python files under the `app` directory:
 3. **`app/database.py`**: Creates the SQLAlchemy database engine connecting to MySQL via PyMySQL with connection pool recycling.
 4. **`app/logging_config.py`**: Configures a lightweight, zero-dependency structured `JSONFormatter` subclassing `logging.Formatter` to stream console logs as single-line JSON strings suitable for production log aggregators.
 5. **`app/models.py`**: Defines the database schema:
-   - **`Merchant`**: Tracks emails, API keys, `xpub` (Master Public Key), `next_address_index`, `sweep_address`, and `sweep_threshold`.
+   - **`Merchant`**: Tracks emails, API keys, `xpub` (Master Public Key), `next_address_index`, `sweep_address`, `sweep_threshold`, `sweep_cold_address`, and `sweep_split_ratio`.
    - **`Invoice`**: Tracks address, RTM amount, fiat value, status (`pending`, `detected`, `paid`, `expired`, `underpaid`), `is_swept` sweeping status, and payment txid.
    - **`WebhookDelivery`**: Manages the persistent queue. Stores url, payload, status (`pending`, `sent`, `failed`, `dlq`), retry attempts, next attempt schedule, and last errors.
 6. **`app/rpc_client.py`**: Integrates with the core daemon via JSON-RPC. Handles address validation (`validateaddress`), balance checking (`getbalance`), address querying (`getreceivedbyaddress`), and UTXO sweeps (`sendtoaddress` with subtract-fees and smart fee parameters).
@@ -50,11 +50,12 @@ The codebase is organized into modular Python files under the `app` directory:
 10. **`app/services/polling.py`**: Main scheduler orchestrating:
    - **Invoice Confirmation Polling**: Confirms payments when they meet confirmation depth.
    - **Webhook Deliveries Queue**: Dispatches POSTs with exponential backoff and routes failures to a Dead Letter Queue (DLQ).
-   - **Wallet Sweeping**: Sweeps paid funds to the merchant sweep address once threshold criteria are met.
+   - **Wallet Sweeping**: Sweeps paid funds, supporting splitting between the hot wallet `sweep_address` and cold-storage `sweep_cold_address` according to the configured `sweep_split_ratio`.
    - **Database Pruning**: Deletes expired invoices (>30 days) and sent webhooks (>7 days).
 11. **`app/services/price.py`**: Price oracle aggregator. Fetches rates dynamically for generic fiat currencies (USD, EUR, GBP) from CoinGecko, falling back to CoinEx ticker if CoinGecko is offline, and caching results in Redis. Implements a resilient memory cache fallback if Redis is enabled but goes offline.
 12. **`app/services/zmq_listener.py`**: Subscribes to the node's `hashtx` ZeroMQ socket to capture mempool broadcasts instantly. Distributes incoming transaction check tasks to a bounded `ThreadPoolExecutor` to prevent thread and process exhaustion under high mempool loads.
-12. **`static/widget.js`**: Scoped checkout UI. Attempts a WebSocket connection for real-time transitions (0-conf detected / paid), automatically falling back to HTTP REST polling if the socket drops.
+13. **`static/widget.js`**: Scoped checkout UI. Attempts a WebSocket connection for real-time transitions (0-conf detected / paid), automatically falling back to HTTP REST polling if the socket drops.
+14. **`sdk/raptoreumpay.py`**: Developer Python SDK. Exposes a simple `RaptoreumPayClient` for invoice creation, status checking, and HMAC webhook signature validation without external dependencies.
 
 ---
 
@@ -124,3 +125,17 @@ The background polling loop checks all `"detected"` invoices at the target block
 The database-backed webhook queue processor attempts to POST the signed HMAC-SHA256 payload.
 - If the merchant server is offline, the task schedules a retry with exponential backoffs. If all 5 attempts fail, the delivery is flagged as `"dlq"` (Dead Letter Queue) so it can be re-sent manually.
 - The customer widget receives the `"paid"` WS frame, displays a checkmark, and routes the user to the transaction receipt page.
+
+---
+
+## 4. Advanced Wallet Sweeping & Cold-Storage Split Sweeps
+
+To protect operational funds, RaptoreumPay features an automated background wallet sweeping worker that periodically aggregates UTXOs from one-time payment addresses to a merchant's designated sweep addresses.
+
+Starting in Phase 8, merchants can configure a `sweep_cold_address` and a `sweep_split_ratio` (a decimal between 0.0 and 1.0, e.g. `0.7` for 70%). When sweeping paid invoice balances:
+- The system splits the swept funds according to the ratio.
+- The cold storage portion (e.g. 70%) is routed to the merchant's offline `sweep_cold_address`.
+- The remaining portion (e.g. 30%) is routed to the merchant's standard operational `sweep_address` (hot wallet).
+- If no cold address or split ratio is configured, 100% of the funds are routed to the standard `sweep_address`.
+
+This split is executed as a single batch transaction or consecutive payments with subtraction of fees enabled, minimizing network transaction costs while ensuring immediate cold storage security.

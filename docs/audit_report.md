@@ -31,6 +31,11 @@ This report details a complete security and operational audit of RaptoreumPay. I
 * **Finding**: Webhooks are automatically signed using the merchant's secret API key.
 * **Mitigation**: Implemented HMAC-SHA256 signature calculations. The signature is computed over `timestamp + "." + json_payload` and sent in the `X-RTM-Signature` header, along with `X-RTM-Timestamp`. This completely mitigates webhook spoofing and replay attacks.
 
+### 1.5 Client SDK Integration Security
+* **Status**: **PASS (Secured)**
+* **Finding**: Custom client integrations often execute insecure HMAC signature verification (e.g. vulnerable to timing attacks or missing replay-protection checks).
+* **Mitigation**: Provided a secure, zero-dependency Python Client SDK (`sdk/raptoreumpay.py`). The SDK implements timing-attack resistant signature comparisons using `hmac.compare_digest` and rejects webhook payloads older than 5 minutes to prevent replay attacks.
+
 ---
 
 ## 2. Operational & Infrastructure Audit
@@ -47,6 +52,16 @@ This report details a complete security and operational audit of RaptoreumPay. I
 * **Mitigation**:
   1. Set a reasonable invoice duration (default is 45 minutes) to ensure expired invoices are cleaned up promptly.
   2. For massive scale, replace polling with **ZMQ (ZeroMQ)** integration. Raptoreum Core supports publishing block and transaction events (e.g., `-zmqpubrawtx` or `-zmqpubrawblock`) to instantly notify the payment backend on incoming blockchain transfers without polling.
+
+### 2.3 Cold-Storage Split Sweeps Operational Security
+* **Status**: **PASS (Mitigated)**
+* **Finding**: Direct sweeping to hot wallets keeps a large volume of funds online and vulnerable if the hot wallet server is compromised.
+* **Mitigation**: Added support for advanced cold-storage split sweeps. Merchants can specify a standard hot `sweep_address` and a secure, offline `sweep_cold_address` with a customizable split ratio. The sweeper routes the defined percentage of funds directly to the offline cold address in a single split transaction, minimizing online hot-wallet risk exposure.
+
+### 2.4 Docker & Kubernetes Security Isolations
+* **Status**: **PASS (Mitigated)**
+* **Finding**: Deploying applications directly on bare metal or virtual machines exposes host resources to containment breakout risks and makes patching/scaling difficult.
+* **Mitigation**: Packaged the system in a multi-stage Docker container build. Configured Kubernetes deployment resources, separating database, cache, and application nodes with least-privilege configurations, isolating service networks, and allowing scalable horizontal replica controls.
 
 ---
 
@@ -88,3 +103,6 @@ This report details a complete security and operational audit of RaptoreumPay. I
 | Stability / Regression | **Mitigated (PASS)** | Mock-based automated pytest suite verifying health, price cache, and HD key components (v1.6.0+). |
 | Excessive Sweep Fees | **Mitigated (PASS)** | Extended RPC sweep method to accept confirmation target and smart fee estimation parameters (v1.6.0+). |
 | Currency Volatility | **Mitigated (PASS)** | Support for dynamic fiat conversion currencies and currency-specific pricing caches (v1.6.0+). |
+| Hot Wallet Exposure | **Mitigated (PASS)** | Cold-storage split sweeps with customizable ratio and destination address (v1.7.0+). |
+| Insecure API Usage | **Mitigated (PASS)** | Timing-resistant and replay-protected zero-dependency Python Client SDK (v1.7.0+). |
+| OS Breakouts | **Mitigated (PASS)** | Multi-stage Docker containment and Kubernetes replica/network isolations (v1.7.0+). |

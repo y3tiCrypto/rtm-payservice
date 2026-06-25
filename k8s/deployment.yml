@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rtm-pay-web
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: rtm-pay-web
+  template:
+    metadata:
+      labels:
+        app: rtm-pay-web
+    spec:
+      containers:
+      - name: web
+        image: your-registry/raptoreumpay:latest
+        ports:
+        - containerPort: 8000
+        envFrom:
+        - configMapRef:
+            name: rtm-pay-config
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+          requests:
+            cpu: "200m"
+            memory: "256Mi"

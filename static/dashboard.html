@@ -11,6 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
       :root {
@@ -642,17 +643,20 @@
         <div class="workspace-grid">
           <!-- Left Column: Invoices Table -->
           <div class="glass-card table-card">
-            <div class="table-header-bar">
-              <h2>Invoices History</h2>
+            <div class="table-header-bar" style="border-bottom: none; padding-bottom: 0;">
+              <div style="display: flex; gap: 20px;">
+                <h2 id="tab-invoices" style="cursor: pointer; border-bottom: 2px solid var(--primary); padding-bottom: 10px;">Invoices History</h2>
+                <h2 id="tab-analytics" style="cursor: pointer; color: var(--text-muted); padding-bottom: 10px;">Visual Analytics</h2>
+              </div>
               <button
                 class="logout-btn"
                 id="btn-refresh"
-                style="padding: 6px 12px"
+                style="padding: 6px 12px; margin-bottom: 10px;"
               >
                 Refresh
               </button>
             </div>
-            <div class="table-scroll">
+            <div class="table-scroll" id="view-invoices">
               <table>
                 <thead>
                   <tr>
@@ -681,6 +685,14 @@
                   </tr>
                 </tbody>
               </table>
+            </div>
+            <div id="view-analytics" style="display: none; padding: 30px; flex-direction: column; gap: 30px; overflow-y: auto;">
+              <div style="position: relative; height: 260px; width: 100%;">
+                <canvas id="volumeChart"></canvas>
+              </div>
+              <div style="position: relative; height: 260px; width: 100%;">
+                <canvas id="txCountChart"></canvas>
+              </div>
             </div>
           </div>
 
@@ -917,6 +929,15 @@
       const invoicesTableBody = document.getElementById("invoices-table-body");
       const btnRefresh = document.getElementById("btn-refresh");
 
+      // Tabs
+      const tabInvoices = document.getElementById("tab-invoices");
+      const tabAnalytics = document.getElementById("tab-analytics");
+      const viewInvoices = document.getElementById("view-invoices");
+      const viewAnalytics = document.getElementById("view-analytics");
+
+      let volumeChart = null;
+      let txCountChart = null;
+
       // Generator Form
       const amountRtmInput = document.getElementById("gen-amount-rtm");
       const amountUsdInput = document.getElementById("gen-amount-usd");
@@ -961,7 +982,12 @@
       };
 
       btnRefresh.onclick = () => {
-        if (activeApiKey) fetchInvoiceHistory(activeApiKey);
+        if (activeApiKey) {
+          fetchInvoiceHistory(activeApiKey);
+          if (viewAnalytics.style.display === "flex") {
+            fetchAnalyticsData(activeApiKey);
+          }
+        }
       };
 
       // Key visibility handler
@@ -983,6 +1009,28 @@
         setTimeout(() => (btnCopyKey.textContent = "Copy"), 2000);
       };
 
+      // Tab switching handlers
+      tabInvoices.onclick = () => {
+        tabInvoices.style.borderBottom = "2px solid var(--primary)";
+        tabInvoices.style.color = "var(--text-main)";
+        tabAnalytics.style.borderBottom = "none";
+        tabAnalytics.style.color = "var(--text-muted)";
+        viewInvoices.style.display = "block";
+        viewAnalytics.style.display = "none";
+      };
+
+      tabAnalytics.onclick = () => {
+        tabAnalytics.style.borderBottom = "2px solid var(--primary)";
+        tabAnalytics.style.color = "var(--text-main)";
+        tabInvoices.style.borderBottom = "none";
+        tabInvoices.style.color = "var(--text-muted)";
+        viewInvoices.style.display = "none";
+        viewAnalytics.style.display = "flex";
+        if (activeApiKey) {
+          fetchAnalyticsData(activeApiKey);
+        }
+      };
+
       // Verify API key and display Dashboard
       async function verifyAndUnlock(key) {
         try {
@@ -1001,10 +1049,130 @@
           displayApiKeyInput.value = "API KEY MASKED";
 
           fetchInvoiceHistory(activeApiKey);
+          if (viewAnalytics.style.display === "flex") {
+            fetchAnalyticsData(activeApiKey);
+          }
         } catch (err) {
           alert(err.message);
           localStorage.removeItem("rtm_merchant_api_key");
         }
+      }
+
+      async function fetchAnalyticsData(key) {
+        try {
+          const res = await fetch(`${API_BASE}/api/merchant/analytics?api_key=${key}`);
+          if (!res.ok) throw new Error("Failed to fetch analytics data");
+          const data = await res.json();
+          renderCharts(data);
+        } catch (err) {
+          console.error("Analytics error:", err);
+        }
+      }
+
+      function renderCharts(data) {
+        if (volumeChart) volumeChart.destroy();
+        if (txCountChart) txCountChart.destroy();
+
+        const ctxVolume = document.getElementById("volumeChart").getContext("2d");
+        volumeChart = new Chart(ctxVolume, {
+          type: "line",
+          data: {
+            labels: data.labels,
+            datasets: [
+              {
+                label: "Transaction Volume (USD)",
+                data: data.volume_fiat,
+                borderColor: "#f59e0b",
+                backgroundColor: "rgba(245, 158, 11, 0.1)",
+                fill: true,
+                tension: 0.3,
+                borderWidth: 2,
+                yAxisID: "yUsd"
+              },
+              {
+                label: "Transaction Volume (RTM)",
+                data: data.volume_rtm,
+                borderColor: "#3b82f6",
+                backgroundColor: "rgba(59, 130, 246, 0.1)",
+                fill: true,
+                tension: 0.3,
+                borderWidth: 2,
+                yAxisID: "yRtm"
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                labels: { color: "#9ca3af" }
+              }
+            },
+            scales: {
+              x: {
+                grid: { color: "rgba(75, 85, 99, 0.2)" },
+                ticks: { color: "#9ca3af" }
+              },
+              yUsd: {
+                type: "linear",
+                position: "left",
+                grid: { color: "rgba(75, 85, 99, 0.2)" },
+                ticks: { color: "#9ca3af" },
+                title: { display: true, text: "USD", color: "#9ca3af" }
+              },
+              yRtm: {
+                type: "linear",
+                position: "right",
+                grid: { drawOnChartArea: false },
+                ticks: { color: "#9ca3af" },
+                title: { display: true, text: "RTM", color: "#9ca3af" }
+              }
+            }
+          }
+        });
+
+        const ctxCount = document.getElementById("txCountChart").getContext("2d");
+        txCountChart = new Chart(ctxCount, {
+          type: "bar",
+          data: {
+            labels: data.labels,
+            datasets: [
+              {
+                label: "Paid Transactions",
+                data: data.paid_count,
+                backgroundColor: "#10b981",
+                borderRadius: 4
+              },
+              {
+                label: "Expired Sessions",
+                data: data.expired_count,
+                backgroundColor: "#ef4444",
+                borderRadius: 4
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                labels: { color: "#9ca3af" }
+              }
+            },
+            scales: {
+              x: {
+                grid: { color: "rgba(75, 85, 99, 0.2)" },
+                ticks: { color: "#9ca3af" }
+              },
+              y: {
+                grid: { color: "rgba(75, 85, 99, 0.2)" },
+                ticks: { color: "#9ca3af", stepSize: 1 },
+                title: { display: true, text: "Count", color: "#9ca3af" }
+              }
+            }
+          }
+        });
       }
 
       // Retrieve Merchant invoice history and compile stats
