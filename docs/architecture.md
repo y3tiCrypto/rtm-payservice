@@ -6,15 +6,25 @@ This document describes the high-level architecture, component structure, and pa
 
 ## 1. High-Level Overview
 
-RaptoreumPay is a non-custodial payment processor. It does not custody merchant funds; rather, it monitors the blockchain for payments sent to unique, single-use addresses generated directly from the merchant's Raptoreum Core wallet. Once a payment is detected with sufficient funds, the processor alerts the merchant via a secure webhook, and the funds remain securely in the merchant's private wallet.
+RaptoreumPay is a high-performance, non-custodial payment processor. It does not custody merchant funds; rather, it monitors the blockchain for payments sent to unique, single-use addresses generated either directly from the merchant's Raptoreum Core wallet or derived offline via an Account Extended Public Key (`xpub`). 
+
+Once a payment is detected, the processor updates states, broadcasts real-time alerts to the customer checkout widget via WebSockets, and queue-delivers a secure, signed webhook payload to the merchant's server.
 
 ```mermaid
 graph TD
-    Widget[Embeddable JS Widget] -->|Query Status| FastAPI[FastAPI Backend]
-    FastAPI -->|Query/Update| DB[(MySQL Database)]
+    Widget[Embeddable JS Widget] -->|Query WS Status| FastAPI[FastAPI Backend / WebSockets]
+    FastAPI -->|Check/Update| DB[(MySQL Database)]
+    FastAPI -->|Ping / Cache| Redis[(Redis Cache & Pub/Sub)]
+    FastAPI -->|Verify limit| Limiter[Slowapi Rate Limiter]
+    FastAPI -->|Derive Address| HDWallet[HD Wallet Offline Derivation]
     FastAPI -->|RPC Commands| RTMNode[Raptoreum Core Node]
     RTMNode -->|Validate Blockchain| RTMChain((Raptoreum Network))
-    APSPoll[APScheduler Polling Loop] -->|Poll Pending Invoices| DB
+    ZMQ[ZMQ hashtx Listener] -->|0-conf mempool event| DB
+    ZMQ -->|Publish socket update| Redis
+    APSPoll[Background Workers Scheduler] -->|1. Polling check confirm depth| DB
+    APSPoll -->|2. Webhook Deliveries Queue| DB
+    APSPoll -->|3. Wallet Sweeping Sweeper| DB
+    APSPoll -->|4. DB Retention Pruner| DB
     APSPoll -->|Check Address Balance| RTMNode
     APSPoll -->|Post Webhook Notification| MerchantServer[Merchant Webhook URL]
 ```
@@ -25,16 +35,25 @@ graph TD
 
 The codebase is organized into modular Python files under the `app` directory:
 
-1. **`app/main.py`**: The application entry point. It initializes FastAPI, mounts the CORS middleware (allowing widget embeds from other domains), registers static assets, mounts routers, and boots up the background polling scheduler.
-2. **`app/config.py`**: Manages environment variables and configurations using `pydantic-settings`. Loads parameters for RPC connection, MySQL database credentials, administrator secrets, and base URLs.
-3. **`app/database.py`**: Creates the SQLAlchemy database engine connecting to MySQL via PyMySQL. Configures connection pool settings (`pool_pre_ping=True`, `pool_recycle=3600`) to maintain persistent database connections.
+1. **`app/main.py`**: The application entry point. It initializes FastAPI, mounts CORS middleware, registers the `slowapi` rate limiter, mounts routers, implements the `/api/health` check system, and boots up background scheduler tasks.
+2. **`app/config.py`**: Manages environment variables and configurations using `pydantic-settings`. Loads parameters for RPC connection, MySQL credentials, Redis connectivity, rate limits, confirmation block depths, and sweeping thresholds.
+3. **`app/database.py`**: Creates the SQLAlchemy database engine connecting to MySQL via PyMySQL with connection pool recycling.
 4. **`app/models.py`**: Defines the database schema:
-   - **`Merchant`**: Tracks registered merchant emails, active statuses, and secret API keys.
-   - **`Invoice`**: Tracks generated checkout sessions. Records the unique RTM address, target RTM amount, approximate USD value, order ID reference, webhook URL, paid amount, creation timestamp, expiry timestamp, transaction ID, and current status (`pending`, `paid`, `expired`, `underpaid`).
-5. **`app/rpc_client.py`**: Integrates with the Raptoreum Core daemon using `bitcoinrpc.authproxy`. Responsible for generating new deposit addresses (`getnewaddress`) and checking received amounts (`getreceivedbyaddress`).
-6. **`app/services/polling.py`**: Manages the background processing engine using `BackgroundScheduler`. Every 30 seconds, it queries MySQL for all `pending` invoices, checks their corresponding wallet addresses on the Raptoreum node, registers payments, fires off webhooks, and marks expired records.
-7. **`app/services/price.py`**: Periodically fetches real-time RTM market pricing in USD from the CoinGecko public API.
-8. **`static/widget.js`**: Client-side widget that renders a payment card containing order details, address string, copy tools, countdown timers, and an automatically generated QR code. Polling is done in the background to automatically transition the client's screen on payment success.
+   - **`Merchant`**: Tracks emails, API keys, `xpub` (Master Public Key), `next_address_index`, `sweep_address`, and `sweep_threshold`.
+   - **`Invoice`**: Tracks address, RTM amount, USD value, status (`pending`, `detected`, `paid`, `expired`, `underpaid`), `is_swept` sweeping status, and payment txid.
+   - **`WebhookDelivery`**: Manages the persistent queue. Stores url, payload, status (`pending`, `sent`, `failed`, `dlq`), retry attempts, next attempt schedule, and last errors.
+5. **`app/rpc_client.py`**: Integrates with the core daemon via JSON-RPC. Handles address validation (`validateaddress`), balance checking (`getbalance`), address querying (`getreceivedbyaddress`), and UTXO sweeps (`sendtoaddress` with subtract-fees flag).
+6. **`app/redis_client.py`**: Configures Redis client instances for caching and pub/sub socket broadcasts (falls back to memory if Redis is disabled).
+7. **`app/limiter.py`**: Configures API rate limit limits based on slowapi.
+8. **`app/services/hd_wallet.py`**: Offline HD wallet address generator. Derives mainnet legacy P2PKH addresses from `xpub` structures using the `bip-utils` library.
+9. **`app/services/polling.py`**: Main scheduler orchestrating:
+   - **Invoice Confirmation Polling**: Confirms payments when they meet confirmation depth.
+   - **Webhook Deliveries Queue**: Dispatches POSTs with exponential backoff and routes failures to a Dead Letter Queue (DLQ).
+   - **Wallet Sweeping**: Sweeps paid funds to the merchant sweep address once threshold criteria are met.
+   - **Database Pruning**: Deletes expired invoices (>30 days) and sent webhooks (>7 days).
+10. **`app/services/price.py`**: Price oracle aggregator. Fetches from CoinGecko, falling back to CoinEx ticker if CoinGecko is offline, and caching results in Redis.
+11. **`app/services/zmq_listener.py`**: Subscribes to the node's `hashtx` ZeroMQ socket to capture mempool broadcasts instantly.
+12. **`static/widget.js`**: Scoped checkout UI. Attempts a WebSocket connection for real-time transitions (0-conf detected / paid), automatically falling back to HTTP REST polling if the socket drops.
 
 ---
 
@@ -47,39 +66,60 @@ The sequence of a typical payment transaction is detailed below:
     |                      |                       |                        |                       |
     |-- Click Checkout --->|                       |                        |                       |
     |                      |-- POST /create ------>|                                                |
-    |                      |   (API Key & USD)     |-- getnewaddress ------>|                       |
-    |                      |                       |<-- [Unique Address] ---|                       |
+    |                      |   (API Key & USD)     |-- Derive address (offline)                     |
+    |                      |                       |   OR call getnewaddress RPC ->|                |
+    |                      |                       |<-- [Address] -----------------|                |
     |                      |                       |                                                |
-    |                      |                       |-- Save Invoice to DB -->|                      |
+    |                      |                       |-- Save Invoice to DB --------->|                |
     |                      |<-- [Invoice ID/Addr] -|                                                |
+    |                      |                                                                        |
+    |                      |-- Connect WebSocket ->|                                                |
+    |                      |   (WS Handshake /ws)  |                                                |
+    |                      |<-- Connected ---------|                                                |
     |                      |                                                                        |
     |-- Scan QR Code ----->|                                                                        |
     |-- Send RTM Payment -------------------------------------------------->|                       |
     |                      |                                                |                       |
-    |                      |                                [30s Polling Loop]                      |
-    |                      |                       |--- getreceivedbyaddress() ---->|               |
-    |                      |                       |<-- [Received Amount] ----------|               |
+    |                      |                                  [ZMQ Event]   |                       |
+    |                      |                       |<-- hashtx (0-conf) ----|                       |
     |                      |                       |                                                |
-    |                      |                       |-- Mark Invoice Paid in DB -->|                 |
+    |                      |                       |-- Mark status: detected ------>|                       |
+    |                      |                       |-- Broadcast 'detected' to WS ->|                       |
+    |                      |<-- status: detected --|                                                |
+    |                      |                                                                        |
+    |                      |                               [Background Polling Loop]                |
+    |                      |                       |-- getreceivedbyaddress(minconf) ->|            |
+    |                      |                       |<-- [Confirmed balance] -----------|            |
     |                      |                       |                                                |
-    |                      |                       |-- Trigger webhook payload -------------------->|
-    |                      |                       |                                                |
+    |                      |                       |-- Mark Invoice status: paid -->|               |
+    |                      |                       |-- Queue Webhook Delivery ----->|               |
+    |                      |                       |-- Broadcast 'paid' to WS ----->|               |
     |                      |<-- status: paid ------|                                                |
+    |                      |                                                                        |
+    |                      |                               [Background Webhook Queue]               |
+    |                      |                       |===============================================>|
+    |                      |                       |                 POST webhook (HMAC Signed)     |
+    |                      |                       |<===============================================|
+    |                      |                       |                 HTTP 200 OK                    |
     |<-- Display Success --|                                                                        |
 ```
 
 ### 1. Invoice Initialization
-The merchant's application server triggers an API request to create an invoice. The request contains the API Key, order reference, and amount in USD or RTM.
-- The backend verifies the API key, queries the RTM price (if USD is requested), and requests a new unique receiving address from the Raptoreum Core wallet.
-- The invoice is saved in the MySQL database as `pending` with a 45-minute expiration time.
+The checkout widget or merchant's server issues a `POST /api/payment/create` request.
+- If the merchant has configured an `xpub` extended public key, the address is derived completely **offline** (watch-only). Otherwise, the backend requests a new receiving address from the core wallet node via JSON-RPC.
+- The invoice is stored in the MySQL database as `pending` with a 45-minute TTL.
 
-### 2. Widget Rendering & Client Polling
-The JavaScript widget dynamically fetches the invoice status from the backend, renders the QR code (containing `raptoreum:<address>?amount=<amount>`), and displays a progress bar countdown. It polls the server every 15 seconds.
+### 2. WS Handshake & Mempool Detection
+The client widget establishes a persistent connection to the WebSockets gateway.
+- As soon as the customer broadcasts their transaction to the blockchain, the node publishes it via ZMQ to the `zmq_listener` thread.
+- The invoice status is updated in the database to `"detected"` (0-conf) and the socket instantly pushes this state to the client, displaying "Payment detected, awaiting confirmation" without any REST polling overhead.
 
-### 3. Payment Detection (Server-side)
-A background task polls the Raptoreum node via RPC every 30 seconds for all pending invoice addresses.
-- If the node reports received funds matching the invoice amount (within a 2% rounding tolerance), the invoice is marked as `paid` with the current timestamp and transaction ID.
-- An asynchronous HTTP POST webhook is dispatched immediately to the merchant's endpoint.
+### 3. Confirmation Depth Verification
+The background polling loop checks all `"detected"` invoices at the target block confirmation depth (`min_confirmations` setting, e.g., 1 confirmation).
+- Once the balance is verified as confirmed by the blockchain node, the status is updated to `"paid"`, `paid_at` timestamp is written, and the WebSocket gateway broadcasts `"paid"`.
+- Instead of triggering HTTP requests synchronously, a secure `WebhookDelivery` log is created in the database queue.
 
-### 4. Client Notification
-On its next status poll, the widget detects the `paid` status, plays a success state, stops polling, and displays confirmation to the customer.
+### 4. Resilient Webhook Dispatch
+The database-backed webhook queue processor attempts to POST the signed HMAC-SHA256 payload.
+- If the merchant server is offline, the task schedules a retry with exponential backoffs. If all 5 attempts fail, the delivery is flagged as `"dlq"` (Dead Letter Queue) so it can be re-sent manually.
+- The customer widget receives the `"paid"` WS frame, displays a checkmark, and routes the user to the transaction receipt page.

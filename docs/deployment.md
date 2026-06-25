@@ -1,6 +1,6 @@
 # Production Deployment Guide (deployment.md)
 
-This document describes how to deploy RaptoreumPay in a production environment using **Python 3.13**, **Node 24** (optional, for frontend tasks), **MySQL 8.0+**, and **Nginx**.
+This document describes how to deploy RaptoreumPay in a production environment using **Python 3.13**, **MySQL 8.0+**, **Redis**, and **Nginx**.
 
 ---
 
@@ -9,8 +9,8 @@ This document describes how to deploy RaptoreumPay in a production environment u
 Before deployment, ensure your Linux server (e.g., Ubuntu 22.04 LTS / 24.04 LTS) has the following:
 * **Python**: Python 3.13 (or 3.10+)
 * **MySQL**: MySQL 8.0 or newer
-* **Node.js**: Node 24+ (required only if you are compiling, formatting, or testing frontend scripts)
-* **Raptoreum Core**: A running `raptoreumd` node with RPC access enabled (either hosted locally or securely over a private network interface).
+* **Redis**: Redis server active (optional, for price caching and multi-instance WebSockets)
+* **Raptoreum Core**: A running `raptoreumd` node with RPC access enabled (and `-zmqpubhashtx=tcp://127.0.0.1:28332` enabled for real-time mempool events).
 
 ---
 
@@ -26,7 +26,7 @@ Before deployment, ensure your Linux server (e.g., Ubuntu 22.04 LTS / 24.04 LTS)
    CREATE DATABASE raptoreumpay CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
    ```
 
-3. Create a restricted user and grant privileges:
+3. Create a restricted database user and grant privileges:
    ```sql
    CREATE USER 'rtm_pay_user'@'localhost' IDENTIFIED BY 'your_super_secure_db_password_here';
    GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, INDEX, ALTER ON raptoreumpay.* TO 'rtm_pay_user'@'localhost';
@@ -54,6 +54,21 @@ RPC_PORT=8766
 RPC_USER=your_rtm_node_rpc_user
 RPC_PASSWORD=your_rtm_node_rpc_password
 
+# ZeroMQ Integration (Event Streaming)
+ZMQ_ENABLED=True
+ZMQ_HOST=127.0.0.1
+ZMQ_PORT=28332
+
+# Redis Integration (horizontal scale & caching)
+REDIS_ENABLED=True
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=
+
+# Safety & Limits
+MIN_CONFIRMATIONS=1
+RATE_LIMIT_PER_MINUTE=30
+
 # Admin Credentials (Basic Auth for backups)
 ADMIN_USERNAME=your_custom_admin_username
 ADMIN_PASSWORD=your_custom_admin_password_999!
@@ -78,8 +93,8 @@ To ensure the FastAPI server runs continuously and recovers automatically after 
    ```ini
    [Unit]
    Description=RaptoreumPay Payment Processor Daemon
-   After=network.target mysql.service
-
+   After=network.target mysql.service redis-server.service
+ 
    [Service]
    User=www-data
    WorkingDirectory=/var/www/rtm-payservice
@@ -87,7 +102,7 @@ To ensure the FastAPI server runs continuously and recovers automatically after 
    Restart=always
    Environment=PYTHONUNBUFFERED=1
    EnvironmentFile=/var/www/rtm-payservice/.env
-
+ 
    [Install]
    WantedBy=multi-user.target
    ```
@@ -103,27 +118,32 @@ To ensure the FastAPI server runs continuously and recovers automatically after 
 
 ## 5. Nginx Reverse Proxy & SSL (HTTPS)
 
-Configure Nginx to act as a reverse proxy, handling client requests and managing SSL certificates.
+Configure Nginx to act as a reverse proxy, handling client requests and managing WebSockets upgrades securely.
 
 1. Create a virtual host configuration:
    ```bash
    sudo nano /etc/nginx/sites-available/pay.yourdomain.com
    ```
 
-2. Add the configuration block:
+2. Add the configuration block (note the WebSocket headers in `/`):
    ```nginx
    server {
        listen 80;
        server_name pay.yourdomain.com;
-
+ 
        location / {
            proxy_pass http://127.0.0.1:8000;
            proxy_set_header Host $host;
            proxy_set_header X-Real-IP $remote_addr;
            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded-for;
            proxy_set_header X-Forwarded-Proto $scheme;
-       }
 
+           # WebSockets support
+           proxy_http_version 1.1;
+           proxy_set_header Upgrade $http_upgrade;
+           proxy_set_header Connection "Upgrade";
+       }
+ 
        location /static/ {
            alias /var/www/rtm-payservice/static/;
            expires 30d;
@@ -148,5 +168,16 @@ Configure Nginx to act as a reverse proxy, handling client requests and managing
 ---
 
 ## 6. DB Migrations Policy
-For initial installations, FastAPI automatically executes `Base.metadata.create_all(bind=engine)` upon startup, which constructs the tables in the MySQL database.
-For schema expansions, it is highly recommended to integrate **Alembic** (`pip install alembic`) to manage database schema updates. Do not modify models directly in production without running formal schema migration files.
+
+Unlike development environments, tables are **not** created automatically upon backend initialization in production. Before launching the system for the first time or deploying upgrades, you must execute the database migration tool:
+
+```bash
+# Navigate to the workspace and activate the virtual environment
+cd /var/www/rtm-payservice
+source venv/bin/activate
+
+# Execute Alembic migrations to upgrade the schema to the latest version
+alembic upgrade head
+```
+
+Do not modify the database tables or models manually in production without executing formal schema migration files.
