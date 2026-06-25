@@ -3,6 +3,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 import uvicorn
 import asyncio
 
@@ -23,7 +24,7 @@ from app.limiter import limiter
 app = FastAPI(
     title="RaptoreumPay",
     description="Simple non-custodial RTM payment processor",
-    version="1.3.0"
+    version="1.4.0"
 )
 
 app.state.limiter = limiter
@@ -107,6 +108,56 @@ def read_root():
         "docs": "/docs",
         "widget_example": "See /static/widget.js for embed instructions"
     }
+
+@app.get("/api/health")
+def health_check(db: Session = Depends(get_db)):
+    from app.rpc_client import rpc
+    
+    health_status = {
+        "status": "healthy",
+        "database": "untested",
+        "redis": "disabled",
+        "rpc": "untested"
+    }
+    
+    # 1. Test Database
+    try:
+        db.execute(text("SELECT 1"))
+        health_status["database"] = "healthy"
+    except Exception as e:
+        health_status["database"] = f"unhealthy: {str(e)}"
+        health_status["status"] = "unhealthy"
+
+    # 2. Test Redis if enabled
+    if settings.redis_enabled:
+        from app.redis_client import redis_client
+        if redis_client is not None:
+            try:
+                redis_client.ping()
+                health_status["redis"] = "healthy"
+            except Exception as e:
+                health_status["redis"] = f"unhealthy: {str(e)}"
+                health_status["status"] = "unhealthy"
+        else:
+            health_status["redis"] = "unhealthy: client not initialized"
+            health_status["status"] = "unhealthy"
+
+    # 3. Test RPC Node
+    try:
+        rpc.rpc.getblockchaininfo()
+        health_status["rpc"] = "healthy"
+    except Exception as e:
+        health_status["rpc"] = f"unhealthy: {str(e)}"
+        health_status["status"] = "unhealthy"
+
+    # Determine response status
+    if health_status["status"] == "healthy":
+        return health_status
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=health_status
+        )
 
 if __name__ == "__main__":
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

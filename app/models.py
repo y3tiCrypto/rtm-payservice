@@ -14,6 +14,8 @@ class Merchant(Base):
     is_active = Column(Boolean, default=True)
     xpub = Column(String(255), nullable=True)
     next_address_index = Column(Integer, default=0, nullable=False)
+    sweep_address = Column(String(255), nullable=True)
+    sweep_threshold = Column(Float, default=1000.0, nullable=False)
 
 
 class Invoice(Base):
@@ -36,6 +38,7 @@ class Invoice(Base):
     expires_at = Column(DateTime(timezone=True), nullable=False)
     paid_at = Column(DateTime(timezone=True), nullable=True)
     txid = Column(String(255), nullable=True)                       # last detected tx (for reference)
+    is_swept = Column(Boolean, default=False, nullable=False)
 
 
 class WebhookDelivery(Base):

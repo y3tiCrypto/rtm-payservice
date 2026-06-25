@@ -50,6 +50,30 @@ class RaptoreumRPC:
         except Exception:
             return None
 
+    def validate_address(self, address: str) -> bool:
+        try:
+            res = self._call_with_retry("validateaddress", address)
+            return res.get("isvalid", False)
+        except Exception:
+            return False
+
+    def get_balance(self) -> float:
+        try:
+            return float(self._call_with_retry("getbalance"))
+        except Exception as e:
+            raise Exception(f"RPC error getting wallet balance: {e}")
+
+    def sweep_wallet(self, sweep_address: str, amount: float) -> str:
+        """
+        Sweep a specific amount from the node's wallet to a destination sweep address.
+        Deducts transaction fees from the sweep amount automatically.
+        """
+        try:
+            # sendtoaddress args: address, amount, comment, comment_to, subtractfeefromamount
+            return self._call_with_retry("sendtoaddress", sweep_address, amount, "", "", True)
+        except Exception as e:
+            raise Exception(f"RPC sweeping error: {e}")
+
 
 # Singleton instance
 rpc = RaptoreumRPC()

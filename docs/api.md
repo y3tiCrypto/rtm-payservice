@@ -320,5 +320,35 @@ def verify_rtm_webhook(payload_bytes: bytes, api_key: str, signature: str, times
 ```
 
 ### Webhook Guidelines
-* Your system should respond with an HTTP `200 OK` or `204 No Content` within 5 seconds.
-* The webhook loop will log delivery errors but does not automatically retry failed deliveries in the current version.
+* Your system should respond with an HTTP `200 OK` or `204 No Content` within 10 seconds.
+* Webhook delivery failures are automatically retried using a database-backed queue with exponential backoffs (up to 5 attempts over 30 minutes) before being sent to the Dead Letter Queue (DLQ) for manual review.
+
+---
+
+## Observability & Monitoring
+
+### System Health Status Check
+Retrieves the real-time operational status of database connectivity, Redis server cache, and the Raptoreum Core node daemon RPC connection.
+
+* **URL**: `/api/health`
+* **Method**: `GET`
+* **Response (200 OK - Healthy)**:
+  ```json
+  {
+    "status": "healthy",
+    "database": "healthy",
+    "redis": "healthy",
+    "rpc": "healthy"
+  }
+  ```
+* **Response (503 Service Unavailable - Unhealthy)**:
+  ```json
+  {
+    "detail": {
+      "status": "unhealthy",
+      "database": "healthy",
+      "redis": "unhealthy: [connection error details]",
+      "rpc": "healthy"
+    }
+  }
+  ```

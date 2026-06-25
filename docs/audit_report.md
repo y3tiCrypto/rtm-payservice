@@ -71,7 +71,7 @@ This report details a complete security and operational audit of RaptoreumPay. I
 | Webhook Security | **Mitigated (PASS)** | Webhooks are signed with HMAC-SHA256 and timestamps (v1.0.0+). |
 | Admin Basic Auth | **Medium** | Enforce TLS and rotate default credentials immediately. |
 | CORS Control | **Medium** | Restrict origins for administrative routes. |
-| Price Oracle | **Mitigated (PASS)** | Thread-safe pricing cache with stale fallback (v1.0.0+) and Redis cache integration (v1.3.0+). |
+| Price Oracle | **Mitigated (PASS)** | Thread-safe pricing cache with stale fallback (v1.0.0+), Redis cache integration (v1.3.0+), and CoinEx price oracle failover (v1.4.0+). |
 | Key Compromise | **Mitigated (PASS)** | Merchant API Key rotation and dashboard control panel implemented (v1.1.0+). |
 | Scale limits | **Mitigated (PASS)** | ZeroMQ transaction streaming and WebSockets gateway implemented (v1.2.0+) with Redis Pub/Sub horizontal scale (v1.3.0+). |
 | API Spam / DOS | **Mitigated (PASS)** | API rate limiting using `slowapi` on write endpoints (v1.3.0+). |
@@ -79,3 +79,6 @@ This report details a complete security and operational audit of RaptoreumPay. I
 | Double Spend / Reorg | **Mitigated (PASS)** | Confirmation block depth validation before payment finalization (v1.3.0+). |
 | Webhook Drops | **Mitigated (PASS)** | Database-backed webhook queue with exponential backoff retries and DLQ (v1.3.0+). |
 | Memory Bloat | **Mitigated (PASS)** | Paginated invoice lists and chunked streaming CSV exports (v1.3.0+). |
+| Wallet Bloat | **Mitigated (PASS)** | Automated wallet sweeping and UTXO consolidation (v1.4.0+). |
+| Observability | **Mitigated (PASS)** | Real-time /api/health monitoring endpoint (v1.4.0+). |
+| Database Bloat | **Mitigated (PASS)** | Automatic database record pruning and retention scheduler (v1.4.0+). |

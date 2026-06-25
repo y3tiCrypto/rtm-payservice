@@ -187,3 +187,9 @@ Our development strategy outlines immediate security upgrades, administrative UI
 * **Database Webhook Queue & DLQ**: [Completed] Implemented a database-backed webhook queue with exponential retry backoff and routing of failed notifications to a Dead Letter Queue (DLQ).
 * **Redis Caching & Pub/Sub**: [Completed] Configured Redis caching for price oracles and Redis Pub/Sub coordination to scale the WebSocket gateway across multiple API instances.
 * **Database Pagination**: [Completed] Implemented limit/offset pagination and streaming CSV exports to prevent server memory bloat.
+
+### ⚙️ Phase 5: Stable Production Readiness (Completed ✅)
+* **Wallet Sweeping & UTXO Consolidation**: [Completed] Developed an automated background wallet sweeping worker that consolidates small transaction inputs to a merchant-defined sweep destination.
+* **Multi-Oracle Price Failover**: [Completed] Integrated the CoinEx market ticker as a secondary pricing oracle to ensure pricing stability if CoinGecko is down.
+* **System Observability Health API**: [Completed] Built the `/api/health` endpoint monitoring MySQL, Redis, and Raptoreum RPC node status.
+* **Database Retention Pruning**: [Completed] Scheduled daily database maintenance tasks to delete expired invoices older than 30 days and sent webhooks older than 7 days.

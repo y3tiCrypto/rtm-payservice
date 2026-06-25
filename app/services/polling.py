@@ -219,6 +219,93 @@ def process_webhook_deliveries():
         db.close()
 
 
+def run_wallet_sweeping():
+    """Background task: periodically consolidate and sweep merchant node wallet funds"""
+    db = SessionLocal()
+    try:
+        # Fetch active merchants who have configured a sweep address
+        merchants = db.query(Merchant).filter(
+            Merchant.sweep_address != None,
+            Merchant.is_active == True
+        ).all()
+
+        for merchant in merchants:
+            try:
+                # Validate address via RPC
+                if not rpc.validate_address(merchant.sweep_address):
+                    logger.error(f"Sweeping: Merchant {merchant.id} has an invalid sweep address: {merchant.sweep_address}")
+                    continue
+
+                # Query all paid, unswept invoices for this merchant
+                invoices = db.query(Invoice).filter(
+                    Invoice.merchant_id == merchant.id,
+                    Invoice.status == "paid",
+                    Invoice.is_swept == False
+                ).all()
+
+                if not invoices:
+                    continue
+
+                total_to_sweep = sum(inv.amount_paid for inv in invoices)
+                if total_to_sweep >= merchant.sweep_threshold:
+                    # Verify node's wallet balance
+                    wallet_balance = rpc.get_balance()
+                    if wallet_balance < total_to_sweep:
+                        logger.warning(
+                            f"Sweeping: Node wallet balance ({wallet_balance} RTM) is less than "
+                            f"the requested sweep amount ({total_to_sweep} RTM) for merchant {merchant.id}."
+                        )
+                        continue
+
+                    # Execute sweep
+                    logger.info(f"Sweeping: Consolidating {total_to_sweep} RTM to {merchant.sweep_address} for merchant {merchant.id}")
+                    txid = rpc.sweep_wallet(merchant.sweep_address, total_to_sweep)
+                    logger.info(f"Sweeping: Transaction complete. TXID: {txid}")
+
+                    # Mark invoices as swept
+                    for inv in invoices:
+                        inv.is_swept = True
+                    db.commit()
+
+            except Exception as e:
+                logger.error(f"Sweeping failed for merchant {merchant.id}: {e}")
+    except Exception as e:
+        logger.error(f"Error in wallet sweeping task: {e}")
+    finally:
+        db.close()
+
+
+def prune_database_records():
+    """Background task: clean up old database records (retention)"""
+    db = SessionLocal()
+    try:
+        from datetime import timedelta
+        # 1. Prune expired invoices older than 30 days
+        cutoff_invoices = datetime.utcnow() - timedelta(days=30)
+        deleted_invoices = db.query(Invoice).filter(
+            Invoice.status == "expired",
+            Invoice.expires_at < cutoff_invoices
+        ).delete()
+
+        # 2. Prune successfully sent webhook deliveries older than 7 days
+        cutoff_webhooks = datetime.utcnow() - timedelta(days=7)
+        deleted_webhooks = db.query(WebhookDelivery).filter(
+            WebhookDelivery.status == "sent",
+            WebhookDelivery.created_at < cutoff_webhooks
+        ).delete()
+
+        db.commit()
+        if deleted_invoices or deleted_webhooks:
+            logger.info(
+                f"Pruning: Cleaned up {deleted_invoices} expired invoices (>30d) "
+                f"and {deleted_webhooks} sent webhooks (>7d)."
+            )
+    except Exception as e:
+        logger.error(f"Pruning database records failed: {e}")
+    finally:
+        db.close()
+
+
 def start_polling_background_task():
     """Start background jobs"""
     # 1. Invoice Polling Job (every 30 seconds)
@@ -238,4 +325,22 @@ def start_polling_background_task():
         name='Process webhook queue',
         replace_existing=True
     )
-    logger.info("Payment polling and webhook queue background tasks started.")
+
+    # 3. Wallet Sweeping Job (every 12 hours)
+    scheduler.add_job(
+        run_wallet_sweeping,
+        trigger=IntervalTrigger(hours=12),
+        id='wallet_sweeping',
+        name='Consolidate and sweep merchant node wallet funds',
+        replace_existing=True
+    )
+
+    # 4. Database Retention Pruning Job (every 24 hours)
+    scheduler.add_job(
+        prune_database_records,
+        trigger=IntervalTrigger(hours=24),
+        id='database_pruning',
+        name='Clean up expired invoices and sent webhooks',
+        replace_existing=True
+    )
+    logger.info("Payment polling, webhook queue, sweeping, and pruning background tasks started.")

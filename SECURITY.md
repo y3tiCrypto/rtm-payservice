@@ -75,3 +75,7 @@ Webhooks notify merchant systems when a payment is received. If a malicious thir
 ### 8. API Spam & Keypool Exhaustion Protection
 - Endpoints that perform database writes (invoice creation, merchant registration) are protected by a rate limiter (`slowapi`).
 - Keep rate limits active (customizable in settings) to prevent keypool exhaustion on the core node and database bloat from brute-force scripts.
+
+### 9. Database Bloat & Storage Exhaustion Protection
+- Uncontrolled database growth from expired invoices and webhook delivery logs is mitigated by an automatic background database pruning task.
+- Unpaid expired invoices older than 30 days and successfully sent webhook deliveries older than 7 days are pruned automatically every 24 hours. This keeps the MySQL database storage footprint clean and prevents storage exhaustion.

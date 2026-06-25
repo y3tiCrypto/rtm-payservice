@@ -38,26 +38,37 @@ def get_rtm_price_usd() -> float:
                     return _cached_price
 
     # 3. Fetch from API
+    fresh_price = 0.0
     try:
         response = requests.get(COINGECKO_API, timeout=5)
         response.raise_for_status()
         data = response.json()
         fresh_price = float(data.get("raptoreum", {}).get("usd", 0.0))
-        
-        if fresh_price > 0:
-            # Save to Redis if available
-            if redis_client is not None:
-                try:
-                    redis_client.set("raptoreumpay:rtm_price", str(fresh_price), ex=CACHE_TTL_SECONDS)
-                except Exception as e:
-                    print(f"Redis cache write error: {e}")
-            else:
-                with _price_lock:
-                    _cached_price = fresh_price
-                    _cached_time = now
-            return fresh_price
     except Exception as e:
-        print(f"Price fetch error: {e}")
+        print(f"Primary price fetch (CoinGecko) failed: {e}. Trying fallback (CoinEx)...")
+        try:
+            coinex_url = "https://api.coinex.com/v1/market/ticker?market=RTMUSDT"
+            response = requests.get(coinex_url, timeout=5)
+            response.raise_for_status()
+            data = response.json()
+            fresh_price = float(data.get("data", {}).get("ticker", {}).get("last", 0.0))
+            print(f"Fallback price fetch (CoinEx) succeeded: {fresh_price}")
+        except Exception as ex:
+            print(f"Fallback price fetch (CoinEx) failed: {ex}")
+            fresh_price = 0.0
+            
+    if fresh_price > 0:
+        # Save to Redis if available
+        if redis_client is not None:
+            try:
+                redis_client.set("raptoreumpay:rtm_price", str(fresh_price), ex=CACHE_TTL_SECONDS)
+            except Exception as e:
+                print(f"Redis cache write error: {e}")
+        else:
+            with _price_lock:
+                _cached_price = fresh_price
+                _cached_time = now
+        return fresh_price
 
     # 4. Fallback on stale local or Redis value
     if redis_client is not None:
