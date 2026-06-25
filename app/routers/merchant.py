@@ -6,7 +6,7 @@ import uuid
 import secrets
 import io
 import csv
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.database import get_db
 from app.models import Merchant, Invoice
@@ -145,7 +145,7 @@ def export_merchant_data(api_key: str, format: str = "json", db: Session = Depen
         invoices = db.query(Invoice).filter(Invoice.merchant_id == merchant.id).order_by(Invoice.created_at.desc()).limit(500).all()
         return {
             "merchant_email": merchant.email,
-            "exported_at": datetime.utcnow().isoformat(),
+            "exported_at": datetime.now(timezone.utc).isoformat(),
             "invoices": [
                 {
                     "id": inv.id,

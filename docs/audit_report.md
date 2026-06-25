@@ -21,10 +21,10 @@ This report details a complete security and operational audit of RaptoreumPay. I
   3. Ensure the admin username/password are rotated out of the default credentials using environment variables.
 
 ### 1.3 CORS (Cross-Origin Resource Sharing) Policy
-* **Status**: **MEDIUM RISK (Operational Necessity)**
-* **Finding**: In `app/main.py`, CORS allows all origins: `allow_origins=["*"]`.
-* **Technical Detail**: While this is necessary for the embeddable check-out widget to be fetched from any merchant website, it also allows arbitrary domains to hit merchant management endpoints if not properly segregated.
-* **Mitigation**: Split routing rules in Nginx so that `/api/payment/...` remains public, but `/api/merchant/...` and `/admin/...` check for host headers or origin validation to prevent CSRF and unauthorized script executions.
+* **Status**: **PASS (Mitigated)**
+* **Finding**: CORS allowed origins were previously hardcoded to `["*"]` in `app/main.py`.
+* **Technical Detail**: Allowing wildcards simplifies frontend embeddable widget deployments but exposes management endpoints to cross-origin risks if host checks are missing.
+* **Mitigation**: Implemented dynamic configuration settings `cors_allow_origins` in `app/config.py` (v1.5.0+). Allowed origins can now be restricted to a specific comma-separated list of merchant websites (e.g. `https://example.com,https://shop.example.com`), completely mitigating unauthorized origin accesses in production.
 
 ### 1.4 Webhook Spoofing / Authenticity
 * **Status**: **PASS (Mitigated)**
@@ -38,7 +38,7 @@ This report details a complete security and operational audit of RaptoreumPay. I
 ### 2.1 CoinGecko Pricing Dependency
 * **Status**: **PASS (Mitigated)**
 * **Finding**: System relies on CoinGecko for USD conversions.
-* **Mitigation**: Implemented a thread-safe local pricing cache (5-minute TTL). In the event of a CoinGecko outage or rate limit block, the system automatically falls back to serving the last known good cached price, ensuring invoice creation continues to operate smoothly.
+* **Mitigation**: Implemented a thread-safe local pricing cache (5-minute TTL). In the event of a CoinGecko outage or rate limit block, the system automatically falls back to serving the last known good cached price. In version 1.5.0+, the price service cache is fully resilient: if Redis is enabled but goes offline/unreachable due to network exceptions, lookup tasks gracefully fall back to the thread-safe local in-memory cache instead of blocking API executions.
 
 ### 2.2 Blockchain Transaction Polling Loop
 * **Status**: **PASS (Functional)**
@@ -70,8 +70,8 @@ This report details a complete security and operational audit of RaptoreumPay. I
 | ---- | ------------ | ---------- |
 | Webhook Security | **Mitigated (PASS)** | Webhooks are signed with HMAC-SHA256 and timestamps (v1.0.0+). |
 | Admin Basic Auth | **Medium** | Enforce TLS and rotate default credentials immediately. |
-| CORS Control | **Medium** | Restrict origins for administrative routes. |
-| Price Oracle | **Mitigated (PASS)** | Thread-safe pricing cache with stale fallback (v1.0.0+), Redis cache integration (v1.3.0+), and CoinEx price oracle failover (v1.4.0+). |
+| CORS Control | **Mitigated (PASS)** | Configurable CORS allowed-origins list settings parameter (v1.5.0+). |
+| Price Oracle | **Mitigated (PASS)** | Thread-safe local cache (v1.0.0+), Redis cache (v1.3.0+), CoinEx failover (v1.4.0+), and resilient local cache fallback if Redis is offline (v1.5.0+). |
 | Key Compromise | **Mitigated (PASS)** | Merchant API Key rotation and dashboard control panel implemented (v1.1.0+). |
 | Scale limits | **Mitigated (PASS)** | ZeroMQ transaction streaming and WebSockets gateway implemented (v1.2.0+) with Redis Pub/Sub horizontal scale (v1.3.0+). |
 | API Spam / DOS | **Mitigated (PASS)** | API rate limiting using `slowapi` on write endpoints (v1.3.0+). |
@@ -82,3 +82,5 @@ This report details a complete security and operational audit of RaptoreumPay. I
 | Wallet Bloat | **Mitigated (PASS)** | Automated wallet sweeping and UTXO consolidation (v1.4.0+). |
 | Observability | **Mitigated (PASS)** | Real-time /api/health monitoring endpoint (v1.4.0+). |
 | Database Bloat | **Mitigated (PASS)** | Automatic database record pruning and retention scheduler (v1.4.0+). |
+| Thread Exhaustion | **Mitigated (PASS)** | ZMQ listener utilizing bounded ThreadPoolExecutor worker pools to process events (v1.5.0+). |
+| Timezone naive offset | **Mitigated (PASS)** | Standardized datetime usages to timezone-aware datetime.now(timezone.utc) (v1.5.0+). |

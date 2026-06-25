@@ -35,8 +35,8 @@ graph TD
 
 The codebase is organized into modular Python files under the `app` directory:
 
-1. **`app/main.py`**: The application entry point. It initializes FastAPI, mounts CORS middleware, registers the `slowapi` rate limiter, mounts routers, implements the `/api/health` check system, and boots up background scheduler tasks.
-2. **`app/config.py`**: Manages environment variables and configurations using `pydantic-settings`. Loads parameters for RPC connection, MySQL credentials, Redis connectivity, rate limits, confirmation block depths, and sweeping thresholds.
+1. **`app/main.py`**: The application entry point. It initializes FastAPI using the modern `lifespan` context manager, mounts CORS middleware dynamically loaded from configured allowed origins, registers the `slowapi` rate limiter, mounts routers, and implements the `/api/health` check system.
+2. **`app/config.py`**: Manages environment variables and configurations using `pydantic-settings`. Loads parameters for RPC connection, MySQL credentials, Redis connectivity, rate limits, confirmation block depths, sweeping thresholds, and the dynamic `cors_allow_origins` list.
 3. **`app/database.py`**: Creates the SQLAlchemy database engine connecting to MySQL via PyMySQL with connection pool recycling.
 4. **`app/models.py`**: Defines the database schema:
    - **`Merchant`**: Tracks emails, API keys, `xpub` (Master Public Key), `next_address_index`, `sweep_address`, and `sweep_threshold`.
@@ -51,8 +51,8 @@ The codebase is organized into modular Python files under the `app` directory:
    - **Webhook Deliveries Queue**: Dispatches POSTs with exponential backoff and routes failures to a Dead Letter Queue (DLQ).
    - **Wallet Sweeping**: Sweeps paid funds to the merchant sweep address once threshold criteria are met.
    - **Database Pruning**: Deletes expired invoices (>30 days) and sent webhooks (>7 days).
-10. **`app/services/price.py`**: Price oracle aggregator. Fetches from CoinGecko, falling back to CoinEx ticker if CoinGecko is offline, and caching results in Redis.
-11. **`app/services/zmq_listener.py`**: Subscribes to the node's `hashtx` ZeroMQ socket to capture mempool broadcasts instantly.
+10. **`app/services/price.py`**: Price oracle aggregator. Fetches from CoinGecko, falling back to CoinEx ticker if CoinGecko is offline, and caching results in Redis. Implements a resilient memory cache fallback if Redis is enabled but goes offline.
+11. **`app/services/zmq_listener.py`**: Subscribes to the node's `hashtx` ZeroMQ socket to capture mempool broadcasts instantly. Distributes incoming transaction check tasks to a bounded `ThreadPoolExecutor` to prevent thread and process exhaustion under high mempool loads.
 12. **`static/widget.js`**: Scoped checkout UI. Attempts a WebSocket connection for real-time transitions (0-conf detected / paid), automatically falling back to HTTP REST polling if the socket drops.
 
 ---

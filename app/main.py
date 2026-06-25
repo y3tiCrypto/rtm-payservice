@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 import uvicorn
 import asyncio
+from contextlib import asynccontextmanager
 
 from app.database import engine, Base, get_db
 from app.config import settings
@@ -18,22 +19,44 @@ from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
 from app.limiter import limiter
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    print("RaptoreumPay starting...")
+    print(f"RPC connection: {settings.rpc_host}:{settings.rpc_port}")
+    
+    # 1. Capture main event loop for WebSockets
+    loop = asyncio.get_running_loop()
+    polling.main_loop = loop
+    
+    # 2. Start background ZMQ thread if enabled
+    start_zmq_background_listener(loop)
+    
+    # 3. Start background polling task (runs alongside ZMQ as backup / fallback)
+    start_polling_background_task()
+    
+    # 4. Start Redis pub/sub socket listener (horizontal scaling)
+    from app.routers.payment import manager
+    manager.start_redis_listener(loop)
+    
+    yield
+
 # Create all tables (Managed by Alembic migrations)
 # Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="RaptoreumPay",
     description="Simple non-custodial RTM payment processor",
-    version="1.4.0"
+    version="1.5.0",
+    lifespan=lifespan
 )
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# Allow CORS for widget (you can restrict origins later)
+# Allow CORS for widget
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # ← tighten in production!
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -82,24 +105,7 @@ def admin_backup(db: Session = Depends(get_db), _=Depends(verify_admin)):
         ]
     }
 
-@app.on_event("startup")
-async def startup_event():
-    print("RaptoreumPay starting...")
-    print(f"RPC connection: {settings.rpc_host}:{settings.rpc_port}")
-    
-    # 1. Capture main event loop for WebSockets
-    loop = asyncio.get_running_loop()
-    polling.main_loop = loop
-    
-    # 2. Start background ZMQ thread if enabled
-    start_zmq_background_listener(loop)
-    
-    # 3. Start background polling task (runs alongside ZMQ as backup / fallback)
-    start_polling_background_task()
-    
-    # 4. Start Redis pub/sub socket listener (horizontal scaling)
-    from app.routers.payment import manager
-    manager.start_redis_listener(loop)
+
 
 @app.get("/")
 def read_root():

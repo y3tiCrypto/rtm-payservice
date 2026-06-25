@@ -76,6 +76,7 @@ ADMIN_PASSWORD=your_custom_admin_password_999!
 # App Details
 SECRET_KEY=generate_a_random_32_character_hex_string
 BASE_URL=https://pay.yourdomain.com
+CORS_ALLOW_ORIGINS=https://yourdomain.com,https://checkout.yourdomain.com
 ```
 
 ---

@@ -36,10 +36,15 @@ class Settings(BaseSettings):
     # App
     secret_key: str
     base_url: str = "http://localhost:8000"
+    cors_allow_origins: str = "*"
 
     # Admin (very basic for MVP)
     admin_username: str = "admin"
     admin_password: str = "change_me"
+
+    @property
+    def cors_origins(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_allow_origins.split(",") if origin.strip()]
 
     class Config:
         env_file = ".env"

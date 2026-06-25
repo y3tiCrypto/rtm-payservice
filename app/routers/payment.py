@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, WebSocket, WebSocketDisconnect, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 import uuid
 
 from app.database import get_db
@@ -69,7 +69,7 @@ def create_invoice(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Address generation failed: {str(e)}")
 
-    expires_at = datetime.utcnow() + timedelta(minutes=45)
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=45)
 
     new_invoice = Invoice(
         id=str(uuid.uuid4()),

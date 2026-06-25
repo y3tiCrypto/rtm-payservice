@@ -1,7 +1,7 @@
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import requests
 import logging
 import hmac
@@ -40,7 +40,7 @@ def check_pending_invoices():
         # 1. Fetch pending invoices (not yet seen in mempool)
         pending = db.query(Invoice).filter(
             Invoice.status == "pending",
-            Invoice.expires_at > datetime.utcnow()
+            Invoice.expires_at > datetime.now(timezone.utc)
         ).all()
 
         for invoice in pending:
@@ -58,7 +58,7 @@ def check_pending_invoices():
                     if settings.min_confirmations == 0:
                         invoice.status = "paid"
                         invoice.amount_paid = received
-                        invoice.paid_at = datetime.utcnow()
+                        invoice.paid_at = datetime.now(timezone.utc)
                         invoice.txid = txid
                         db.commit()
                         logger.info(f"Invoice {invoice.id} marked as paid (0-conf target met)")
@@ -77,7 +77,7 @@ def check_pending_invoices():
         # 2. Fetch detected invoices (seen in mempool, waiting for block confirmations)
         detected = db.query(Invoice).filter(
             Invoice.status == "detected",
-            Invoice.expires_at > datetime.utcnow()
+            Invoice.expires_at > datetime.now(timezone.utc)
         ).all()
 
         for invoice in detected:
@@ -87,7 +87,7 @@ def check_pending_invoices():
                 if received >= invoice.amount_requested * 0.98:
                     invoice.status = "paid"
                     invoice.amount_paid = received
-                    invoice.paid_at = datetime.utcnow()
+                    invoice.paid_at = datetime.now(timezone.utc)
                     db.commit()
                     logger.info(f"Invoice {invoice.id} confirmed paid at depth {settings.min_confirmations}")
                     queue_webhook_delivery(invoice, db)
@@ -98,7 +98,7 @@ def check_pending_invoices():
         # Mark expired invoices
         expired_records = db.query(Invoice).filter(
             Invoice.status.in_(["pending", "detected"]),
-            Invoice.expires_at <= datetime.utcnow()
+            Invoice.expires_at <= datetime.now(timezone.utc)
         ).all()
         for exp_inv in expired_records:
             exp_inv.status = "expired"
@@ -167,7 +167,7 @@ def process_webhook_deliveries():
     """Background task: processes pending/failed webhooks in the DB queue with exponential backoff"""
     db = SessionLocal()
     try:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         # Fetch deliveries that are 'pending' or 'failed' (and ready for retry)
         deliveries = db.query(WebhookDelivery).filter(
             or_(
@@ -209,7 +209,7 @@ def process_webhook_deliveries():
                     delivery.status = "failed"
                     # Exponential backoff: retry in 2, 4, 8, 16 minutes
                     delay_minutes = 2 ** delivery.attempts
-                    delivery.next_attempt_at = datetime.utcnow() + timedelta(minutes=delay_minutes)
+                    delivery.next_attempt_at = datetime.now(timezone.utc) + timedelta(minutes=delay_minutes)
                 
                 delivery.last_error = error_msg
                 db.commit()
@@ -279,16 +279,15 @@ def prune_database_records():
     """Background task: clean up old database records (retention)"""
     db = SessionLocal()
     try:
-        from datetime import timedelta
         # 1. Prune expired invoices older than 30 days
-        cutoff_invoices = datetime.utcnow() - timedelta(days=30)
+        cutoff_invoices = datetime.now(timezone.utc) - timedelta(days=30)
         deleted_invoices = db.query(Invoice).filter(
             Invoice.status == "expired",
             Invoice.expires_at < cutoff_invoices
         ).delete()
 
         # 2. Prune successfully sent webhook deliveries older than 7 days
-        cutoff_webhooks = datetime.utcnow() - timedelta(days=7)
+        cutoff_webhooks = datetime.now(timezone.utc) - timedelta(days=7)
         deleted_webhooks = db.query(WebhookDelivery).filter(
             WebhookDelivery.status == "sent",
             WebhookDelivery.created_at < cutoff_webhooks

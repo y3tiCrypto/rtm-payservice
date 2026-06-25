@@ -69,6 +69,9 @@ Edit `.env` to include your MySQL credentials, admin dashboard secrets, Raptoreu
 ZMQ_ENABLED=True
 ZMQ_HOST=127.0.0.1
 ZMQ_PORT=28332
+
+# CORS Configuration (comma-separated list of allowed origins, or * for all)
+CORS_ALLOW_ORIGINS=*
 ```
 
 ### 3. Install Dependencies
@@ -193,3 +196,10 @@ Our development strategy outlines immediate security upgrades, administrative UI
 * **Multi-Oracle Price Failover**: [Completed] Integrated the CoinEx market ticker as a secondary pricing oracle to ensure pricing stability if CoinGecko is down.
 * **System Observability Health API**: [Completed] Built the `/api/health` endpoint monitoring MySQL, Redis, and Raptoreum RPC node status.
 * **Database Retention Pruning**: [Completed] Scheduled daily database maintenance tasks to delete expired invoices older than 30 days and sent webhooks older than 7 days.
+
+### 💎 Phase 6: Code Quality, Concurrency, and Resilience Improvements (Completed ✅)
+* **ZMQ Concurrency Protection**: [Completed] Replaced unbounded thread creation in the ZeroMQ listener with a bounded ThreadPoolExecutor (max 10 workers) to prevent thread/file descriptor exhaustion.
+* **Modern FastAPI Lifespan Handler**: [Completed] Migrated deprecated startup event handlers to the modern standard `lifespan` context manager.
+* **Resilient Local Price Cache Fallback**: [Completed] Upgraded the pricing oracle client to fallback gracefully to the local thread-safe in-memory cache if Redis is enabled but goes offline.
+* **Timezone-Aware Standardizations**: [Completed] Replaced naive `datetime.utcnow()` with timezone-aware `datetime.now(timezone.utc)` to comply with Python 3.12+ datetime deprecation guidelines.
+* **Configurable CORS Origins**: [Completed] Replaced the hardcoded CORS wildcard with a configurable environment setting (`CORS_ALLOW_ORIGINS`).

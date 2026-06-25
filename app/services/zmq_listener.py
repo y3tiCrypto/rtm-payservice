@@ -3,7 +3,8 @@ import zmq
 import logging
 import asyncio
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
+from concurrent.futures import ThreadPoolExecutor
 from app.config import settings
 from app.rpc_client import rpc
 from app.database import SessionLocal
@@ -11,6 +12,9 @@ from app.models import Invoice, Merchant
 from app.services import polling
 
 logger = logging.getLogger(__name__)
+
+# Bounded thread pool executor for processing transaction events to prevent thread exhaustion
+zmq_executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="ZMQWorker")
 
 # Shared reference to the main event loop for WS broadcasts
 main_loop = None
@@ -38,8 +42,8 @@ def zmq_listener_loop():
             topic, body, seq = socket.recv_multipart()
             txid = body.hex()
             
-            # Spin up a worker thread to fetch and inspect details without blocking ZMQ stream
-            threading.Thread(target=process_blockchain_transaction, args=(txid,), daemon=True).start()
+            # Submit to the thread pool instead of spawning a new thread per transaction
+            zmq_executor.submit(process_blockchain_transaction, txid)
         except Exception as e:
             logger.error(f"ZeroMQ: Error in listener socket loop: {e}")
             time.sleep(1)
@@ -65,7 +69,7 @@ def process_blockchain_transaction(txid: str):
                 invoice = db.query(Invoice).filter(
                     Invoice.address == address,
                     Invoice.status == "pending",
-                    Invoice.expires_at > datetime.utcnow()
+                    Invoice.expires_at > datetime.now(timezone.utc)
                 ).first()
                 
                 if invoice:
@@ -79,7 +83,7 @@ def process_blockchain_transaction(txid: str):
                         if settings.min_confirmations == 0:
                             invoice.status = "paid"
                             invoice.amount_paid = received
-                            invoice.paid_at = datetime.utcnow()
+                            invoice.paid_at = datetime.now(timezone.utc)
                             invoice.txid = txid
                             db.commit()
                             logger.info(f"ZeroMQ: Invoice {invoice.id} successfully marked as paid (0-conf)")
