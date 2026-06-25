@@ -13,14 +13,21 @@ from app.services import polling
 from app.services.polling import start_polling_background_task
 from app.services.zmq_listener import start_zmq_background_listener
 
+from slowapi.errors import RateLimitExceeded
+from slowapi import _rate_limit_exceeded_handler
+from app.limiter import limiter
+
 # Create all tables (Managed by Alembic migrations)
 # Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="RaptoreumPay",
     description="Simple non-custodial RTM payment processor",
-    version="1.2.0"
+    version="1.3.0"
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Allow CORS for widget (you can restrict origins later)
 app.add_middleware(
@@ -88,6 +95,10 @@ async def startup_event():
     
     # 3. Start background polling task (runs alongside ZMQ as backup / fallback)
     start_polling_background_task()
+    
+    # 4. Start Redis pub/sub socket listener (horizontal scaling)
+    from app.routers.payment import manager
+    manager.start_redis_listener(loop)
 
 @app.get("/")
 def read_root():

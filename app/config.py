@@ -23,6 +23,16 @@ class Settings(BaseSettings):
     zmq_host: str = "127.0.0.1"
     zmq_port: int = 28332
 
+    # Redis Configurations
+    redis_enabled: bool = False
+    redis_host: str = "localhost"
+    redis_port: int = 6379
+    redis_password: str | None = None
+
+    # Safety & Limits
+    min_confirmations: int = 1
+    rate_limit_per_minute: int = 30
+
     # App
     secret_key: str
     base_url: str = "http://localhost:8000"

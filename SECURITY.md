@@ -67,3 +67,11 @@ The payment processor relies on direct RPC calls to a running Raptoreum Core nod
 Webhooks notify merchant systems when a payment is received. If a malicious third party sends spoofed webhook payloads to the merchant, they could trick the merchant into shipping goods without paying.
 - **HMAC-SHA256 Webhook Signatures (Active)**: In version 1.0.0+, webhooks are automatically signed using HMAC-SHA256 with the merchant's secret API key. The signature is transmitted in the `X-RTM-Signature` header, along with a `X-RTM-Timestamp` header. This prevents webhook tampering and replay attacks. Merchants must verify these signatures on their endpoints.
 - **IP Whitelisting**: Recommend merchants whitelist the static IP of your payment processor server.
+
+### 7. Watch-Only HD Key Security
+- If offline HD wallet derivation is configured, keep the merchant's Master Private Key (`xprv`) completely offline (e.g. on a hardware wallet or secure offline backup).
+- Only register the Master Public Key (`xpub`) in the database. An `xpub` allows child public key derivation without private key access, protecting the wallet balance from theft even if the database is compromised.
+
+### 8. API Spam & Keypool Exhaustion Protection
+- Endpoints that perform database writes (invoice creation, merchant registration) are protected by a rate limiter (`slowapi`).
+- Keep rate limits active (customizable in settings) to prevent keypool exhaustion on the core node and database bloat from brute-force scripts.

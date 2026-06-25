@@ -179,3 +179,11 @@ Our development strategy outlines immediate security upgrades, administrative UI
 * **ZeroMQ (ZMQ) Integration**: [Completed] Constructed a ZeroMQ listener daemon thread subscribing to `hashtx` blocks to receive instant blockchain payment notifications without polling.
 * **WebSockets Gateway**: [Completed] Developed real-time WebSocket status endpoints (`/api/payment/{id}/ws`) and updated the checkout widget to use hybrid WebSocket connections with a REST poll fallback.
 * **Database Migration Engine**: [Completed] Integrated **Alembic** to manage automatic database schema migrations.
+
+### 🛡️ Phase 4: Advanced Production Enhancements (Completed ✅)
+* **Rate Limiting & Anti-Spam**: [Completed] Integrated rate limiting (using `slowapi`) to protect key endpoints from API spam, keypool exhaustion, and brute-force registration.
+* **Watch-Only HD Wallet Derivation**: [Completed] Developed offline RTM legacy address derivation from an Account Extended Public Key (`xpub`) using the `bip-utils` library, allowing nodes to run securely with zero private keys stored on-server.
+* **Reorg & Double-Spend Defenses**: [Completed] Separated mempool detection (`"detected"`) from confirmed finalization (`"paid"`) depending on customizable confirmation block depth targets.
+* **Database Webhook Queue & DLQ**: [Completed] Implemented a database-backed webhook queue with exponential retry backoff and routing of failed notifications to a Dead Letter Queue (DLQ).
+* **Redis Caching & Pub/Sub**: [Completed] Configured Redis caching for price oracles and Redis Pub/Sub coordination to scale the WebSocket gateway across multiple API instances.
+* **Database Pagination**: [Completed] Implemented limit/offset pagination and streaming CSV exports to prevent server memory bloat.

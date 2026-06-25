@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
@@ -10,6 +10,8 @@ from datetime import datetime
 
 from app.database import get_db
 from app.models import Merchant, Invoice
+from app.limiter import limiter
+from app.config import settings
 
 router = APIRouter()
 
@@ -17,7 +19,8 @@ class MerchantCreate(BaseModel):
     email: EmailStr
 
 @router.post("/create")
-def create_merchant(merchant_data: MerchantCreate, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def create_merchant(request: Request, merchant_data: MerchantCreate, db: Session = Depends(get_db)):
     existing = db.query(Merchant).filter(Merchant.email == merchant_data.email).first()
     if existing:
         raise HTTPException(
@@ -56,12 +59,16 @@ def get_current_merchant(api_key: str, db: Session = Depends(get_db)):
     }
 
 @router.get("/invoices")
-def get_merchant_invoices(api_key: str, db: Session = Depends(get_db)):
+def get_merchant_invoices(api_key: str, limit: int = 20, offset: int = 0, db: Session = Depends(get_db)):
     merchant = db.query(Merchant).filter(Merchant.api_key == api_key).first()
     if not merchant:
         raise HTTPException(status_code=401, detail="Invalid API key")
     
-    invoices = db.query(Invoice).filter(Invoice.merchant_id == merchant.id).order_by(Invoice.created_at.desc()).all()
+    # Cap page size to prevent abuse
+    limit = min(max(limit, 1), 100)
+    offset = max(offset, 0)
+    
+    invoices = db.query(Invoice).filter(Invoice.merchant_id == merchant.id).order_by(Invoice.created_at.desc()).offset(offset).limit(limit).all()
     
     return [
         {
@@ -102,31 +109,40 @@ def export_merchant_data(api_key: str, format: str = "json", db: Session = Depen
     if not merchant:
         raise HTTPException(status_code=401, detail="Invalid API key")
     
-    invoices = db.query(Invoice).filter(Invoice.merchant_id == merchant.id).order_by(Invoice.created_at.desc()).all()
-    
     if format.lower() == "csv":
-        output = io.StringIO()
-        writer = csv.writer(output)
-        # Write headers
-        writer.writerow([
-            "Invoice ID", "Address", "RTM Requested", "RTM Paid", 
-            "USD Value", "Order ID", "Webhook URL", "Status", 
-            "Created At", "Paid At", "TXID"
-        ])
-        # Write rows
-        for inv in invoices:
+        def csv_generator():
+            output = io.StringIO()
+            writer = csv.writer(output)
+            # Write headers
             writer.writerow([
-                inv.id, inv.address, inv.amount_requested, inv.amount_paid,
-                inv.fiat_amount or "", inv.order_id or "", inv.webhook_url or "", inv.status,
-                inv.created_at.isoformat(), inv.paid_at.isoformat() if inv.paid_at else "", inv.txid or ""
+                "Invoice ID", "Address", "RTM Requested", "RTM Paid", 
+                "USD Value", "Order ID", "Webhook URL", "Status", 
+                "Created At", "Paid At", "TXID"
             ])
-        output.seek(0)
+            yield output.getvalue()
+            output.seek(0)
+            output.truncate(0)
+
+            # Query and yield in chunks of 100
+            query = db.query(Invoice).filter(Invoice.merchant_id == merchant.id).order_by(Invoice.created_at.desc())
+            for inv in query.yield_per(100):
+                writer.writerow([
+                    inv.id, inv.address, inv.amount_requested, inv.amount_paid,
+                    inv.fiat_amount or "", inv.order_id or "", inv.webhook_url or "", inv.status,
+                    inv.created_at.isoformat(), inv.paid_at.isoformat() if inv.paid_at else "", inv.txid or ""
+                ])
+                yield output.getvalue()
+                output.seek(0)
+                output.truncate(0)
+
         return StreamingResponse(
-            io.BytesIO(output.getvalue().encode("utf-8")),
+            csv_generator(),
             media_type="text/csv",
             headers={"Content-Disposition": "attachment; filename=raptoreumpay_export.csv"}
         )
     else:
+        # Cap JSON export to the latest 500 records to prevent memory issues
+        invoices = db.query(Invoice).filter(Invoice.merchant_id == merchant.id).order_by(Invoice.created_at.desc()).limit(500).all()
         return {
             "merchant_email": merchant.email,
             "exported_at": datetime.utcnow().isoformat(),

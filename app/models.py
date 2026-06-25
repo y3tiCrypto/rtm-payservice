@@ -12,6 +12,8 @@ class Merchant(Base):
     api_key = Column(String(255), unique=True, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     is_active = Column(Boolean, default=True)
+    xpub = Column(String(255), nullable=True)
+    next_address_index = Column(Integer, default=0, nullable=False)
 
 
 class Invoice(Base):
@@ -34,3 +36,17 @@ class Invoice(Base):
     expires_at = Column(DateTime(timezone=True), nullable=False)
     paid_at = Column(DateTime(timezone=True), nullable=True)
     txid = Column(String(255), nullable=True)                       # last detected tx (for reference)
+
+
+class WebhookDelivery(Base):
+    __tablename__ = "webhook_deliveries"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    invoice_id = Column(String(36), ForeignKey("invoices.id"), nullable=False)
+    url = Column(String(500), nullable=False)
+    payload = Column(String(2000), nullable=False)
+    status = Column(String(50), default="pending")                 # pending | sent | failed | dlq
+    attempts = Column(Integer, default=0, nullable=False)
+    next_attempt_at = Column(DateTime(timezone=True), nullable=True)
+    last_error = Column(String(1000), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

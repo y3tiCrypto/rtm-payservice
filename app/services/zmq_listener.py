@@ -74,22 +74,30 @@ def process_blockchain_transaction(txid: str):
                     received = rpc.get_received_by_address(address, minconf=0)
                     
                     if received >= invoice.amount_requested * 0.98:
-                        invoice.status = "paid"
-                        invoice.amount_paid = received
-                        invoice.paid_at = datetime.utcnow()
-                        invoice.txid = txid
+                        from app.services.polling import queue_webhook_delivery
                         
-                        db.commit()
-                        logger.info(f"ZeroMQ: Invoice {invoice.id} successfully marked as paid via real-time ZMQ")
-                        
-                        # Dispatched webhooks
-                        polling.send_webhook(invoice, db)
+                        if settings.min_confirmations == 0:
+                            invoice.status = "paid"
+                            invoice.amount_paid = received
+                            invoice.paid_at = datetime.utcnow()
+                            invoice.txid = txid
+                            db.commit()
+                            logger.info(f"ZeroMQ: Invoice {invoice.id} successfully marked as paid (0-conf)")
+                            queue_webhook_delivery(invoice, db)
+                            status_to_broadcast = "paid"
+                        else:
+                            invoice.status = "detected"
+                            invoice.amount_paid = received
+                            invoice.txid = txid
+                            db.commit()
+                            logger.info(f"ZeroMQ: Invoice {invoice.id} marked as detected (awaiting confirmation)")
+                            status_to_broadcast = "detected"
                         
                         # Dispatch WebSocket broadcast to the client
                         if main_loop is not None:
                             from app.routers.payment import manager
                             asyncio.run_coroutine_threadsafe(
-                                manager.broadcast_status(invoice.id, "paid"),
+                                manager.broadcast_status(invoice.id, status_to_broadcast),
                                 main_loop
                             )
     except Exception as e:

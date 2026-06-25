@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, WebSocket, WebSocketDisconnect, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from datetime import datetime, timedelta
@@ -9,6 +9,7 @@ from app.models import Invoice, Merchant
 from app.rpc_client import rpc
 from app.services.price import get_rtm_price_usd
 from app.config import settings
+from app.limiter import limiter
 
 router = APIRouter()
 
@@ -32,7 +33,9 @@ class InvoiceResponse(BaseModel):
 
 
 @router.post("/create", response_model=InvoiceResponse)
+@limiter.limit(f"{settings.rate_limit_per_minute}/minute")
 def create_invoice(
+    request: Request,
     invoice_data: InvoiceCreate,
     api_key: str,
     db: Session = Depends(get_db)
@@ -57,9 +60,14 @@ def create_invoice(
 
     # Generate unique address
     try:
-        address = rpc.get_new_address(label=f"invoice-{uuid.uuid4().hex[:8]}")
+        if merchant.xpub:
+            from app.services.hd_wallet import derive_rtm_address
+            address = derive_rtm_address(merchant.xpub, merchant.next_address_index)
+            merchant.next_address_index += 1
+        else:
+            address = rpc.get_new_address(label=f"invoice-{uuid.uuid4().hex[:8]}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"RPC error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Address generation failed: {str(e)}")
 
     expires_at = datetime.utcnow() + timedelta(minutes=45)
 
@@ -113,6 +121,37 @@ def get_invoice_status(invoice_id: str, db: Session = Depends(get_db)):
 class ConnectionManager:
     def __init__(self):
         self.active_connections: dict[str, list[WebSocket]] = {}
+        self.loop = None
+        self.redis_thread = None
+
+    def start_redis_listener(self, loop):
+        from app.redis_client import redis_client
+        import json
+        import threading
+        
+        self.loop = loop
+        if redis_client is None:
+            return
+
+        def redis_pubsub_worker():
+            pubsub = redis_client.pubsub()
+            pubsub.subscribe("raptoreumpay:invoice_updates")
+            for message in pubsub.listen():
+                if message and message['type'] == 'message':
+                    try:
+                        data = json.loads(message['data'])
+                        invoice_id = data.get("invoice_id")
+                        status = data.get("status")
+                        if invoice_id and status:
+                            asyncio.run_coroutine_threadsafe(
+                                self.local_broadcast_status(invoice_id, status),
+                                self.loop
+                            )
+                    except Exception:
+                        pass
+
+        self.redis_thread = threading.Thread(target=redis_pubsub_worker, daemon=True)
+        self.redis_thread.start()
 
     async def connect(self, websocket: WebSocket, invoice_id: str):
         await websocket.accept()
@@ -126,13 +165,27 @@ class ConnectionManager:
             if not self.active_connections[invoice_id]:
                 del self.active_connections[invoice_id]
 
-    async def broadcast_status(self, invoice_id: str, status: str):
+    async def local_broadcast_status(self, invoice_id: str, status: str):
         if invoice_id in self.active_connections:
             for connection in self.active_connections[invoice_id]:
                 try:
                     await connection.send_json({"invoice_id": invoice_id, "status": status})
                 except Exception:
                     pass
+
+    async def broadcast_status(self, invoice_id: str, status: str):
+        from app.redis_client import redis_client
+        import json
+
+        if redis_client is not None:
+            try:
+                payload = json.dumps({"invoice_id": invoice_id, "status": status})
+                redis_client.publish("raptoreumpay:invoice_updates", payload)
+                return
+            except Exception:
+                pass
+        
+        await self.local_broadcast_status(invoice_id, status)
 
 manager = ConnectionManager()
 

@@ -14,3 +14,6 @@ pymysql==1.1.1
 cryptography==42.0.5
 pyzmq==27.1.0
 alembic==1.13.1
+bip-utils==2.9.3
+redis==5.0.3
+slowapi==0.1.9
