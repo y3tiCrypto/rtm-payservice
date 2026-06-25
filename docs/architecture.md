@@ -56,6 +56,8 @@ The codebase is organized into modular Python files under the `app` directory:
 12. **`app/services/zmq_listener.py`**: Subscribes to the node's `hashtx` ZeroMQ socket to capture mempool broadcasts instantly. Distributes incoming transaction check tasks to a bounded `ThreadPoolExecutor` to prevent thread and process exhaustion under high mempool loads.
 13. **`static/widget.js`**: Scoped checkout UI. Attempts a WebSocket connection for real-time transitions (0-conf detected / paid), automatically falling back to HTTP REST polling if the socket drops.
 14. **`sdk/raptoreumpay.py`**: Developer Python SDK. Exposes a simple `RaptoreumPayClient` for invoice creation, status checking, and HMAC webhook signature validation without external dependencies.
+15. **`sdk/raptoreumpay.php`**: Developer PHP SDK. Exposes a `RaptoreumPayClient` class with cURL integration and PHP `hash_equals()` replay-proof signature verification.
+16. **`sdk/raptoreumpay.js`**: Developer Node.js SDK. Exposes a `RaptoreumPayClient` class using native `fetch` and crypto-based timing-safe signature checks.
 
 ---
 

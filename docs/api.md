@@ -427,3 +427,111 @@ is_valid = RaptoreumPayClient.verify_webhook_signature(
     api_key="your_secret_api_key_here"
 )
 ```
+
+---
+
+## PHP Client SDK
+
+A native, zero-dependency PHP Client SDK is available in [sdk/raptoreumpay.php](file:///E:/RTM-Scripts/rtm-payservice/sdk/raptoreumpay.php) to simplify API integration in external PHP projects (e.g. WooCommerce storefronts).
+
+### Initialization
+
+```php
+require_once 'sdk/raptoreumpay.php';
+
+$client = new RaptoreumPayClient(
+    "your_secret_api_key_here",
+    "https://pay.yourdomain.com"
+);
+```
+
+### Methods
+
+#### 1. Create Invoice
+Generates a new payment invoice request.
+
+```php
+$invoice = $client->createInvoice(
+    100.0, // $amountRtm (or null if using fiat)
+    null,  // $amountFiat
+    null,  // $fiatCurrency
+    "order_12345",
+    "https://yourstore.com/webhooks/rtm"
+);
+echo $invoice['invoice_id'] . ': ' . $invoice['address'];
+```
+
+#### 2. Get Invoice Status
+Fetches the current status and payment metrics of an invoice.
+
+```php
+$status = $client->getInvoiceStatus("your-invoice-uuid");
+echo $status['status']; // 'pending', 'paid', or 'expired'
+```
+
+#### 3. Verify Webhook Signature
+A static utility method to verify incoming HMAC signatures on webhooks.
+
+```php
+$payload = file_get_contents('php://input');
+$signature = $_SERVER['HTTP_X_RTM_SIGNATURE'] ?? '';
+$timestamp = $_SERVER['HTTP_X_RTM_TIMESTAMP'] ?? '';
+
+$isValid = RaptoreumPayClient::verifyWebhookSignature(
+    $payload,
+    $signature,
+    $timestamp,
+    "your_secret_api_key_here"
+);
+```
+
+---
+
+## JavaScript / Node.js Client SDK
+
+A native, zero-dependency Node.js Client SDK is available in [sdk/raptoreumpay.js](file:///E:/RTM-Scripts/rtm-payservice/sdk/raptoreumpay.js) to simplify API integration in Express, Next.js, or serverless Node apps.
+
+### Initialization
+
+```javascript
+const { RaptoreumPayClient } = require("./sdk/raptoreumpay");
+
+const client = new RaptoreumPayClient(
+  "your_secret_api_key_here",
+  "https://pay.yourdomain.com"
+);
+```
+
+### Methods
+
+#### 1. Create Invoice
+Generates a new payment invoice request.
+
+```javascript
+const invoice = await client.createInvoice({
+  amountRtm: 100.0,
+  orderId: "order_12345",
+  webhookUrl: "https://yourstore.com/webhooks/rtm"
+});
+console.log(invoice.invoice_id, invoice.address);
+```
+
+#### 2. Get Invoice Status
+Fetches the current status and payment metrics of an invoice.
+
+```javascript
+const status = await client.getInvoiceStatus("your-invoice-uuid");
+console.log(status.status); // 'pending', 'paid', or 'expired'
+```
+
+#### 3. Verify Webhook Signature
+A static utility method to verify incoming HMAC signatures on webhooks.
+
+```javascript
+const isValid = RaptoreumPayClient.verifyWebhookSignature(
+  req.rawBody, // Buffer or string payload
+  req.headers["x-rtm-signature"],
+  req.headers["x-rtm-timestamp"],
+  "your_secret_api_key_here"
+);
+```

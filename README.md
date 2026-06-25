@@ -224,6 +224,6 @@ Our development strategy outlines immediate security upgrades, administrative UI
 
 ### 📦 Phase 8: Distribution, Containerization, SDKs, and Visual Analytics (Completed ✅)
 * **Production Containerization & Orchestration**: [Completed] Packaged the app inside a multi-stage `Dockerfile` and `docker-compose.prod.yml` configuration, and provided Kubernetes manifests (`k8s/`) for production cloud deployments.
-* **Python Client SDK**: [Completed] Created a native Python SDK (`sdk/raptoreumpay.py`) to wrap invoice creation, payment status checking, and HMAC webhook signature verification.
+* **Developer Client SDKs**: [Completed] Created native, zero-dependency SDKs for Python (`sdk/raptoreumpay.py`), PHP (`sdk/raptoreumpay.php`), and Node.js (`sdk/raptoreumpay.js`) supporting invoice operations and replay-safe, timing-resistant HMAC webhook signature verification.
 * **Cold-Storage Split Sweeps**: [Completed] Introduced split wallet sweep logic with a customizable cold storage ratio and address, allowing automated sweeps to be divided between hot and cold storage.
 * **Merchant Dashboard Visual Analytics**: [Completed] Integrated a graphical analytics dashboard with Chart.js using dynamic line and bar charts tracking transaction volume and paid/expired metrics.
