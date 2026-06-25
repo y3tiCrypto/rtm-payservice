@@ -161,7 +161,14 @@ Returns a list of the 100 most recent invoices across all merchants. Protected b
 
 When an invoice is paid, RaptoreumPay issues an HTTP POST request to the merchant's configured `webhook_url` containing payment metadata.
 
+### Request Headers
+Every webhook request contains the following HTTP headers:
+* `Content-Type`: `application/json`
+* `X-RTM-Signature`: Hex-encoded HMAC-SHA256 signature calculated over `${timestamp}.${raw_payload_json}` using the merchant's secret API Key.
+* `X-RTM-Timestamp`: UNIX timestamp string of when the webhook was generated (UTC).
+
 ### Payload Format
+The POST request body is a JSON string containing the payment details:
 ```json
 {
   "event": "payment.confirmed",
@@ -174,6 +181,31 @@ When an invoice is paid, RaptoreumPay issues an HTTP POST request to the merchan
   "order_id": "merchant-order-101",
   "merchant_id": "merchant-uuid-string"
 }
+```
+
+### Webhook Verification Workflow (Python)
+```python
+import hmac
+import hashlib
+import time
+
+def verify_rtm_webhook(payload_bytes: bytes, api_key: str, signature: str, timestamp: str) -> bool:
+    # 1. Prevent replay attacks
+    if abs(int(time.time()) - int(timestamp)) > 300:
+        return False
+        
+    # 2. Formulate signed message
+    signed_payload = f"{timestamp}.".encode('utf-8') + payload_bytes
+    
+    # 3. Compute expected signature using merchant's secret API key
+    expected_signature = hmac.new(
+        api_key.encode('utf-8'),
+        signed_payload,
+        hashlib.sha256
+    ).hexdigest()
+    
+    # 4. Secure string comparison
+    return hmac.compare_digest(expected_signature, signature)
 ```
 
 ### Webhook Guidelines

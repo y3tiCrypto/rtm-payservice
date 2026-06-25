@@ -14,9 +14,9 @@ from app.services.polling import start_polling_background_task
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
-    title="RaptoreumPay MVP",
+    title="RaptoreumPay",
     description="Simple non-custodial RTM payment processor",
-    version="0.1.0"
+    version="1.0.0"
 )
 
 # Allow CORS for widget (you can restrict origins later)

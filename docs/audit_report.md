@@ -27,28 +27,18 @@ This report details a complete security and operational audit of RaptoreumPay. I
 * **Mitigation**: Split routing rules in Nginx so that `/api/payment/...` remains public, but `/api/merchant/...` and `/admin/...` check for host headers or origin validation to prevent CSRF and unauthorized script executions.
 
 ### 1.4 Webhook Spoofing / Authenticity
-* **Status**: **HIGH RISK (Payment Verification)**
-* **Finding**: Webhooks (`app/services/polling.py`) transmit JSON payloads over plain HTTP POST to the merchant URL without signatures.
-* **Threat**: If a third party figures out a merchant's webhook URL, they can send a forged `payment.confirmed` payload to trick the merchant into releasing products without paying.
-* **Mitigation**:
-  1. Introduce Webhook Signatures. Calculate an HMAC using SHA256 over the request body with a shared secret key:
-     ```python
-     signature = hmac.new(secret_key, request_body, hashlib.sha256).hexdigest()
-     ```
-  2. Append the signature as a header (e.g., `X-RTM-Signature`).
-  3. Instruct merchants to check this signature before fulfilling orders.
+* **Status**: **PASS (Mitigated)**
+* **Finding**: Webhooks are automatically signed using the merchant's secret API key.
+* **Mitigation**: Implemented HMAC-SHA256 signature calculations. The signature is computed over `timestamp + "." + json_payload` and sent in the `X-RTM-Signature` header, along with `X-RTM-Timestamp`. This completely mitigates webhook spoofing and replay attacks.
 
 ---
 
 ## 2. Operational & Infrastructure Audit
 
 ### 2.1 CoinGecko Pricing Dependency
-* **Status**: **LOW-MEDIUM RISK (External Dependency)**
-* **Finding**: The payment system converts USD to RTM using CoinGecko's public endpoint (`app/services/price.py`).
-* **Threat**: CoinGecko's free public endpoint has strict rate limits and is prone to temporary outages. If CoinGecko is down, invoice creation with `amount_usd` returns a `0.0` exchange rate, causing invoice creation to fail (HTTP 503).
-* **Mitigation**:
-  1. Implement pricing caching. Store the RTM exchange rate in database/memory cache and refresh it every 5 minutes instead of querying CoinGecko for every invoice.
-  2. Configure secondary fallback price APIs (e.g., Coinpaprika, TradeOgre, or Dex-Trade APIs).
+* **Status**: **PASS (Mitigated)**
+* **Finding**: System relies on CoinGecko for USD conversions.
+* **Mitigation**: Implemented a thread-safe local pricing cache (5-minute TTL). In the event of a CoinGecko outage or rate limit block, the system automatically falls back to serving the last known good cached price, ensuring invoice creation continues to operate smoothly.
 
 ### 2.2 Blockchain Transaction Polling Loop
 * **Status**: **PASS (Functional)**
@@ -78,8 +68,8 @@ This report details a complete security and operational audit of RaptoreumPay. I
 
 | Item | Threat Level | Resolution |
 | ---- | ------------ | ---------- |
-| Webhook Security | **High** | Implement HMAC Webhook signatures. |
+| Webhook Security | **Mitigated (PASS)** | Webhooks are signed with HMAC-SHA256 and timestamps (v1.0.0+). |
 | Admin Basic Auth | **Medium** | Enforce TLS and rotate default credentials immediately. |
 | CORS Control | **Medium** | Restrict origins for administrative routes. |
-| Price Oracle | **Medium** | Implement a local pricing cache (5-minute TTL) to avoid API rate limits. |
+| Price Oracle | **Mitigated (PASS)** | Thread-safe pricing cache with stale fallback implemented (v1.0.0+). |
 | Scale limits | **Low** | If invoice volume exceeds 10,000 active concurrent invoices, migrate from polling to ZMQ. |

@@ -4,9 +4,13 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 import requests
 import logging
+import hmac
+import hashlib
+import json
+import time
 
 from app.database import SessionLocal
-from app.models import Invoice
+from app.models import Invoice, Merchant
 from app.rpc_client import rpc
 
 logger = logging.getLogger(__name__)
@@ -90,7 +94,29 @@ def send_webhook(invoice, db):
     }
 
     try:
-        response = requests.post(invoice.webhook_url, json=payload, timeout=10)
+        # Fetch the merchant to get their secret API key
+        merchant = db.query(Merchant).filter(Merchant.id == invoice.merchant_id).first()
+        if not merchant:
+            logger.error(f"Merchant {invoice.merchant_id} not found for webhook signature signing.")
+            return
+
+        # Prepare payload and compute signature
+        payload_str = json.dumps(payload, sort_keys=True)
+        timestamp = str(int(time.time()))
+        signed_payload = f"{timestamp}.{payload_str}".encode('utf-8')
+        signature = hmac.new(
+            merchant.api_key.encode('utf-8'),
+            signed_payload,
+            hashlib.sha256
+        ).hexdigest()
+
+        headers = {
+            "Content-Type": "application/json",
+            "X-RTM-Signature": signature,
+            "X-RTM-Timestamp": timestamp
+        }
+
+        response = requests.post(invoice.webhook_url, data=payload_str, headers=headers, timeout=10)
         response.raise_for_status()
         logger.info(f"Webhook sent successfully to {invoice.webhook_url}")
     except Exception as e:

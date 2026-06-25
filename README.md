@@ -113,14 +113,47 @@ To display the payment widget on your store site, embed the container element an
 
 ---
 
+## 🔒 Webhook Verification (HMAC-SHA256)
+
+For production security, merchants should verify that incoming webhook payloads originate from the payment processor. Every webhook request includes two headers:
+* `X-RTM-Signature`: Hex-encoded HMAC-SHA256 signature.
+* `X-RTM-Timestamp`: UNIX timestamp string.
+
+### Python Verification Example
+```python
+import hmac
+import hashlib
+import json
+
+def verify_webhook(payload_bytes: bytes, api_key: str, signature_header: str, timestamp_header: str) -> bool:
+    # 1. Prevent replay attacks by checking timestamp age (e.g., max 5 minutes)
+    import time
+    if abs(int(time.time()) - int(timestamp_header)) > 300:
+        return False
+    
+    # 2. Re-create the signed message format exactly
+    signed_payload = f"{timestamp_header}.".encode('utf-8') + payload_bytes
+    
+    # 3. Compute and compare HMAC
+    computed = hmac.new(
+        api_key.encode('utf-8'),
+        signed_payload,
+        hashlib.sha256
+    ).hexdigest()
+    
+    return hmac.compare_digest(computed, signature_header)
+```
+
+---
+
 ## 🗺️ System Roadmap
 
 Our development strategy outlines immediate security upgrades, administrative UI enhancements, and scaling optimizations:
 
-### 🚀 Phase 1: Security Hardening (Q3 2026)
-* **HMAC-SHA256 Webhook Signatures**: Introduce headers signed with a shared key to guarantee webhook authenticity and protect merchants from spoofing.
-* **Pricing Cache Layer**: Add a local caching system (5-minute time-to-live) for CoinGecko queries to prevent rate-limit failures (HTTP 503).
-* **RPC Connection Timeout Protections**: Build retry mechanisms for RPC client queries during temporary node restarts.
+### 🚀 Phase 1: Security Hardening (Completed ✅)
+* **HMAC-SHA256 Webhook Signatures**: [Completed] Webhooks are signed using the merchant's API Key and a timestamp to guarantee message authenticity and protect against replay attacks.
+* **Pricing Cache Layer**: [Completed] Implemented a thread-safe local cache (5-minute TTL) with an expired cache fallback system to ensure uninterrupted service if CoinGecko goes offline.
+* **RPC Connection Timeout Protections**: [Completed] Constructed an RPC retry method with incremental backoff (3 attempts) to improve resilience against transient network anomalies and daemon restarts.
 
 ### 📊 Phase 2: Administrative Enhancements (Q4 2026)
 * **Merchant Dashboard UI**: Develop a clean, web-based merchant dashboard to inspect payment history, verify active webhooks, and rotate API keys.

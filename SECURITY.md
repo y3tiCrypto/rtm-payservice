@@ -63,5 +63,5 @@ The payment processor relies on direct RPC calls to a running Raptoreum Core nod
 
 ### 6. Webhook Authenticity & Webhook Signatures
 Webhooks notify merchant systems when a payment is received. If a malicious third party sends spoofed webhook payloads to the merchant, they could trick the merchant into shipping goods without paying.
-- **Implement HMAC Signatures**: For production-ready webhooks, implement signature headers. The payment server signs the JSON payload using a shared secret key and appends it in the request headers (e.g., `X-RTM-Signature`). The merchant server verifies this signature before processing the event.
+- **HMAC-SHA256 Webhook Signatures (Active)**: In version 1.0.0+, webhooks are automatically signed using HMAC-SHA256 with the merchant's secret API key. The signature is transmitted in the `X-RTM-Signature` header, along with a `X-RTM-Timestamp` header. This prevents webhook tampering and replay attacks. Merchants must verify these signatures on their endpoints.
 - **IP Whitelisting**: Recommend merchants whitelist the static IP of your payment processor server.
